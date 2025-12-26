@@ -7,6 +7,18 @@
 
 ---
 
+## Scope Clarification
+
+This review focuses exclusively on **Playbook-scope items**: roles, prompts, workflows, and decision-making processes.
+
+Items related to **context persistence, session detection, and automation** belong to Project Ontos and are listed separately in [Appendix A: Features Deferred to Ontos v3.0](#appendix-a-features-deferred-to-ontos-v30).
+
+**The distinction:**
+- **Playbook** = What prompts to use, what roles exist, how to make decisions (repeatable across projects)
+- **Ontos** = Context storage, session state detection, archival automation (infrastructure)
+
+---
+
 ## Context
 
 I am the Claude instance that has served as Chief Architect for Project Ontos across 30+ sessions, spanning v2.6 through v2.9.4. I've operated within this playbook's framework—participating in spec convergence, code reviews, synthesis, and reality syncs. This review reflects lessons learned from actual use, not theoretical analysis.
@@ -27,6 +39,7 @@ The playbook author asked me to "ultrathink" and provide feedback that "directly
 8. [New Sections to Add](#8-new-sections-to-add)
 9. [Quick Reference Card](#9-quick-reference-card)
 10. [Implementation Priority](#10-implementation-priority)
+11. [Appendix A: Features Deferred to Ontos v3.0](#appendix-a-features-deferred-to-ontos-v30)
 
 ---
 
@@ -49,7 +62,6 @@ The playbook author asked me to "ultrathink" and provide feedback that "directly
 |-----|--------|
 | **No emergency procedures** | When things go wrong, there's no playbook |
 | **No escalation paths** | Disagreements stall without resolution rules |
-| **No session management guidance** | Context degrades; no guidance on when to reset |
 | **Model-specific patterns missing** | "Ultrathink" is Claude-specific; other models need different triggers |
 | **Developer role too passive** | "Your job: Nothing" invites disasters |
 | **No failure modes catalog** | Same mistakes repeat without pattern recognition |
@@ -171,8 +183,6 @@ When things go wrong, follow these protocols. Don't improvise under pressure.
 4. If summary is vague: Archive Ontos, start fresh session
 5. New session starts with: "Activate Ontos. We're continuing from [last decision point]."
 
-**Prevention:** Use Context Refresh pattern every 60-90 minutes (see Section 5).
-
 ---
 
 ### E6: Reviewers All Approve Too Easily
@@ -249,84 +259,6 @@ When you override an agent's recommendation:
 ```
 
 This creates accountability and learning material for future sessions.
-```
-
----
-
-### 2.3 Session Management Section
-
-**Problem:** No guidance on session length, context degradation, or when to start fresh.
-
-**Add this section after Escalation Matrix:**
-
-```markdown
----
-
-## Session Management
-
-### Session Length Guidelines
-
-| Session Type | Recommended Length | Archive Trigger |
-|--------------|-------------------|-----------------|
-| Strategy/Planning | 60-90 minutes | After major decision |
-| Spec Convergence | 90-120 minutes | After each round completes |
-| Development | Until PR created | After PR opened |
-| Code Review | 30-60 minutes per reviewer | After all reviews collected |
-| Debugging | Until fix verified | After fix merged |
-
-**Hard rule:** No single session longer than 3 hours. Context quality degrades significantly beyond this point.
-
-### Signs of Context Degradation
-
-Watch for these signals that the session needs reset:
-
-| Signal | What's Happening | Action |
-|--------|-----------------|--------|
-| Model asks about something already discussed | Working memory saturated | Context Refresh or new session |
-| Responses become more generic | Losing project-specific context | Activate Ontos, re-ground |
-| "As we discussed earlier" is wrong | Hallucinating past context | Stop, correct, consider new session |
-| Model hedges more ("perhaps", "maybe") | Confidence decreasing as context blurs | New session with explicit context |
-| Contradicts an earlier decision | Context corrupted | Definitely new session |
-
-### Context Refresh Protocol
-
-Use this every 60-90 minutes, or whenever you sense drift:
-
-```
-We've been working for a while. Before we continue:
-
-1. Summarize the decisions we've made so far (bullet points).
-2. What's still open or unresolved?
-3. What's our immediate next action?
-
-I want to verify we're aligned before proceeding.
-```
-
-If the summary is wrong, correct it explicitly. If it's vague, consider starting a fresh session.
-
-### Session Handoff Protocol
-
-When ending a session that another model (or future you) will continue:
-
-1. **Archive Ontos** — Decisions logged
-2. Create handoff note:
-   ```markdown
-   ## Session Handoff
-   **Ended:** [timestamp]
-   **State:** [What's done / What's in progress / What's next]
-   **Open Questions:** [Anything unresolved]
-   **Warning:** [Any gotchas the next session should know]
-   ```
-3. Next session starts with: "Activate Ontos. Continuing from [last checkpoint]."
-
-### When to Force New Session
-
-Always start fresh when:
-- Switching to a fundamentally different task (e.g., from spec writing to debugging)
-- More than 24 hours since last session on this work
-- You feel confused about what's been decided
-- The model seems confused about what's been decided
-- After any Emergency Procedure resolution
 ```
 
 ---
@@ -704,21 +636,21 @@ If you notice an issue in unchanged code that you missed before, flag it separat
 
 ---
 
-### 5.4 Context Refresh Pattern
+### 5.4 Context Refresh Prompt
 
-**Why:** Long sessions degrade. Periodic re-grounding prevents drift.
+**Why:** When you sense context drift, use this prompt to re-ground.
 
-**Add to Session Management:**
+**Add to Prompts Library:**
 
 ```markdown
-### Context Refresh Pattern
+### Context Refresh Prompt
 
-Use every 60-90 minutes, or whenever you sense drift.
+Use when you sense the model is losing track of decisions or context.
 
 **Prompt:**
 
 ```
-We've been working for a while. Let's verify alignment before continuing.
+Let's verify alignment before continuing.
 
 Please summarize:
 1. **Decisions made this session** (bullet points, be specific)
@@ -1220,7 +1152,6 @@ Learn from these common failure patterns to prevent them.
 | **Convergence Collapse** | Architects stop debating but don't actually agree | Exhaustion, social pressure | Require explicit "I agree this is better because [X]" not just "I'm done" |
 | **Scope Creep** | Developer adds "improvements" | Ambiguous spec, developer judgment | Strict rule: not in spec = not in PR; monitor during development |
 | **Testing Theater** | 100% coverage, broken feature | Tests test implementation, not behavior | Require edge case tests; Adversarial tests the tests |
-| **Context Amnesia** | Model contradicts earlier decision | Session too long, no refresh | Archive frequently; use Context Refresh pattern |
 | **Sycophancy Cascade** | All reviewers agree, all are wrong | Same model family, shared blind spots | Use different models; require dissent before approval |
 | **Documentation Lag** | Feature ships, docs don't update | No Documentation Specialist role | Make doc update part of merge criteria |
 | **Master Plan Rot** | Plan says X, codebase is Y, no one notices | No Reality Sync after shipping | Mandatory Chief Architect review after each version |
@@ -1238,7 +1169,9 @@ Learn from these common failure patterns to prevent them.
 
 ## Metrics
 
-### What to Track Per Version
+Track these to improve your process over time.
+
+### What to Measure Per Version
 
 | Metric | How to Measure | Target | Red Flag |
 |--------|----------------|--------|----------|
@@ -1248,20 +1181,6 @@ Learn from these common failure patterns to prevent them.
 | Bugs found post-merge | Issues discovered after | <10% | >30% (review process broken) |
 | Spec-to-merge time | Calendar days | Varies | Consistent increase = process bloat |
 | Developer stuck time | Time waiting for clarification | <10% of dev time | >25% = spec needs work |
-
-### How to Log
-
-Add to session log YAML frontmatter:
-
-```yaml
-metrics:
-  spec_rounds: 3
-  review_rounds: 2
-  bugs_in_review: 4
-  bugs_post_merge: 0
-  spec_to_merge_days: 3
-  blockers: "Config path confusion required spec clarification"
-```
 
 ### Retrospective Questions
 
@@ -1368,7 +1287,7 @@ Fill this in as you learn. This directly improves your workflow.
 | Developer looping | Stop → Read last 3 attempts → Constrain explicitly |
 | Post-merge bug | Revert first → Hotfix branch → Debug second |
 | Security issue | Private session → Fast fix → No public discussion |
-| Context collapse | Pause → Summarize → Correct or new session |
+| Context collapse | Pause → Use Context Refresh prompt → Correct or new session |
 | Everyone approves easily | Suspicious → Add new reviewer → Require specifics |
 
 ### Escalation Rules
@@ -1378,12 +1297,6 @@ Fill this in as you learn. This directly improves your workflow.
 | Adversarial blocks, others approve | Adversarial wins unless you explicitly accept risk |
 | >5 convergence rounds | Scope too big; split the version |
 | Synthesizers disagree | Dig into raw reviews; disagreement is signal |
-
-### Session Hygiene
-- Archive after 2+ hours
-- Context Refresh every 60-90 minutes
-- New session after any emergency
-- New session when model contradicts itself
 
 ### Quality Gates
 - [ ] Spec completeness test passed (fresh model has no questions)
@@ -1401,37 +1314,94 @@ Fill this in as you learn. This directly improves your workflow.
 
 1. **Emergency Procedures section** — You need to know what to do when things go wrong
 2. **Escalation Matrix** — Clear rules prevent stalling on disagreements
-3. **Session Management guidance** — Context degradation is real and preventable
-4. **Enhanced Developer role** — "Your job: Nothing" is dangerous
-5. **Model-specific anti-sycophancy patterns** — "Ultrathink" doesn't work everywhere
+3. **Enhanced Developer role** — "Your job: Nothing" is dangerous
+4. **Model-specific anti-sycophancy patterns** — "Ultrathink" doesn't work everywhere
 
 ### Should-Have for v1.1 (High Value)
 
-6. **Assumption Surfacing pattern** — Prevents bugs at the source
-7. **Spec Completeness Test** — Makes "is it detailed enough" testable
-8. **Enhanced prompts** (Implementation Architect, Code Reviewer, Adversarial) — Direct quality improvement
-9. **Failure Modes Catalog** — Prevents repeat mistakes
-10. **Documentation Specialist role** — Prevents doc lag
+5. **Assumption Surfacing pattern** — Prevents bugs at the source
+6. **Spec Completeness Test** — Makes "is it detailed enough" testable
+7. **Enhanced prompts** (Implementation Architect, Code Reviewer, Adversarial) — Direct quality improvement
+8. **Failure Modes Catalog** — Prevents repeat mistakes
+9. **Documentation Specialist role** — Prevents doc lag
 
 ### Could-Have for v1.1 (Nice to Have)
 
-11. **Pre-Mortem pattern** — Valuable but not blocking
-12. **Delta Review pattern** — Useful for incremental development
-13. **Metrics section** — Good for learning but takes time to populate
-14. **Flow diagram improvements** — Clarifying but not urgent
+10. **Pre-Mortem pattern** — Valuable but not blocking
+11. **Delta Review pattern** — Useful for incremental development
+12. **Metrics section** — Good for learning but takes time to populate
+13. **Flow diagram improvements** — Clarifying but not urgent
 
 ### Defer to v1.2
 
 - Security Auditor role (requires more process change)
 - Cross-project learning patterns
 - Advanced model selection algorithms
-- Automated metrics collection
+
+---
+
+## Appendix A: Features Deferred to Ontos v3.0
+
+The following recommendations from the original review belong to **Project Ontos** (context management infrastructure), not the Playbook (process methodology). They are documented here for future Ontos development.
+
+### A.1 Session Degradation Detection
+
+**What:** Ontos should automatically detect when context quality is degrading:
+- Model contradicts logged decisions
+- Model asks about previously-answered questions
+- Responses become generic instead of project-specific
+
+**Why Ontos:** This is detection/automation, not a prompt or process.
+
+### A.2 Session Length Warnings
+
+**What:** Ontos should warn when a session exceeds recommended length:
+- "You've been in this session for 2 hours. Consider archiving."
+- Configurable thresholds per session type
+
+**Why Ontos:** This is automation triggered by session state.
+
+### A.3 Auto-Refresh Suggestions
+
+**What:** When degradation is detected, Ontos should suggest running the Context Refresh prompt.
+
+**Why Ontos:** The prompt itself is Playbook; the trigger is Ontos.
+
+### A.4 Decision Continuity Verification
+
+**What:** On "Activate Ontos", verify the model's understanding matches logged decisions:
+- Ontos presents key decisions from recent sessions
+- Model confirms or flags discrepancies
+
+**Why Ontos:** This is context retrieval and verification infrastructure.
+
+### A.5 Metrics Storage Schema
+
+**What:** Standardized YAML frontmatter for session metrics:
+```yaml
+metrics:
+  spec_rounds: 3
+  review_rounds: 2
+  bugs_in_review: 4
+  bugs_post_merge: 0
+```
+
+**Why Ontos:** Ontos owns the data model; Playbook defines what to measure.
+
+### A.6 Metrics Aggregation and Trends
+
+**What:** Roll up per-session metrics into trends:
+- Average spec rounds over time
+- Bug escape rate by version
+- Process efficiency trends
+
+**Why Ontos:** This is data aggregation and querying infrastructure.
 
 ---
 
 ## Closing Thoughts
 
-This playbook is already in the top percentile of structured LLM development approaches. The v1.0 foundation is solid—the gaps are at the edges (failure handling, escalation, session management) and in depth (more specific prompts, explicit patterns).
+This playbook is already in the top percentile of structured LLM development approaches. The v1.0 foundation is solid—the gaps are at the edges (failure handling, escalation) and in depth (more specific prompts, explicit patterns).
 
 The most impactful single change: **Add Emergency Procedures.** Every real project has failures. A playbook without failure handling is only half a playbook.
 
@@ -1442,7 +1412,7 @@ I've tried to be specific rather than general, actionable rather than advisory. 
 ---
 
 **Reviewer:** Claude Code (Opus 4.5)
-**Review Version:** 1.0
+**Review Version:** 1.1 (scope-corrected)
 **Date:** 2025-12-24
 
 *"You're helping me help you."* — Taking that seriously.

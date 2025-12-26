@@ -1,118 +1,221 @@
 # LLM Development Playbook
-> A solo developer's operating system for LLM-augmented product development
+> Prompt library and workflow reference for LLM-augmented development
 > Last updated: December 2024
 
 ---
 
-## Philosophy
+## How to Use This Document
 
-You are the **Product Owner**, **Decision Maker**, and **Manual Orchestrator**. LLMs are your team:
-- They propose, you dispose
-- They execute, you validate direction
-- They review each other, you break ties
-- **You trigger every handoff**—nothing moves without you asking the next agent to work
+**Audience:** This document is for LLMs generating prompts. For human reference (emergencies, escalation, monitoring tasks), see [orchestrator-handbook.md](orchestrator-handbook.md).
 
-Your competitive advantage isn't coding—it's judgment, taste, and knowing what to build.
+**When asked to generate a prompt:** 
+1. Find the relevant prompt in the [Prompts Library](#prompts-library)
+2. Get variable values from [session-variables.md](session-variables.md)
+3. Substitute variables and output the prompt
 
-### Your Operating Model
-```
-┌─────────────────────────────────────────────────────────┐
-│                         YOU                              │
-│  ┌─────────────────────────────────────────────────┐    │
-│  │ • Write strategy & product vision               │    │
-│  │ • Trigger each LLM to do their job              │    │
-│  │ • Review synthesized outputs (not raw code)     │    │
-│  │ • Make go/no-go decisions at each gate          │    │
-│  │ • Direct debugging when things break            │    │
-│  └─────────────────────────────────────────────────┘    │
-│                           │                              │
-│                           ▼                              │
-│              ┌────────────────────────┐                  │
-│              │   ONTOS CONTEXT MAP    │ ◄── Ground Truth │
-│              │  (All agents read this)│                  │
-│              └────────────────────────┘                  │
-│                           │                              │
-│    ┌──────────┬──────────┬──────────┬──────────┐        │
-│    │Strategist│ Architect│ Developer│ Reviewer │  ...   │
-│    └──────────┴──────────┴──────────┴──────────┘        │
-└─────────────────────────────────────────────────────────┘
-```
+**When asked "what's next?":** Consult the [Workflow Phases](#workflow-phases) section.
 
-You don't read code. You read summaries, make decisions, and approve merges.
+**Context Persistence:** This playbook assumes [Project Ontos](https://github.com/ohjona/Project-Ontos) handles context sync between agents.
 
 ---
 
-## Context Backbone: Project Ontos
+## Quick Navigation
 
-All agents operate from a shared context graph via [Project Ontos](https://github.com/ohjona/Project-Ontos).
+### Roles
+[Strategist](#-strategist) · [Product Architect](#-product-architect) · [Chief Architect](#-chief-architect) · [Implementation Architect](#-implementation-architect) · [Developer](#-developer-agentic) · [Code Reviewer](#-code-reviewer) · [Adversarial Reviewer](#-adversarial-reviewer-critical-role) · [Synthesizer](#-synthesizer) · [Debugger](#-debugger) · [QA Analyst](#-qa-analyst)
 
-### Why This Matters
-- **No context drift**: Every agent reads from `Ontos_Context_Map.md`, not their own interpretation
-- **Decisions survive migrations**: Strategy and product layers persist even when atoms (code) get rewritten
-- **Session continuity**: Archive sessions to preserve decision rationale for future agents
+### Core Prompts (in order of typical use)
+1. [Implementation Architect Prompt](#implementation-architect-prompt) — write spec
+2. [Implementation Plan Review Prompt](#implementation-plan-review-prompt-fellow-architects) — fellow architects review
+3. [Implementation Architect Response Prompt](#implementation-architect-response-to-review-prompt) — address feedback
+4. [Fellow Architects Re-Review Prompt](#fellow-architects-re-review-prompt) — check revisions
+5. [Spec Finalization Prompt](#spec-finalization-prompt-after-convergence) — clean up for developer
+6. [Development Initiation Prompt](#development-initiation-prompt) — start coding
+7. [Code Reviewer Prompt](#code-reviewer-prompt) — review PR
+8. [Adversarial Reviewer Prompt](#adversarial-reviewer-prompt) — try to break it
+9. [Developer Response Prompt](#developer-response-to-review-prompt) — address review feedback
+10. [Code Reviewer Re-Review Prompt](#code-reviewer-re-review-prompt) — verify fixes
+11. [Synthesizer Prompt](#synthesizer-prompt) — compress for decision
+12. [Cross-Synthesis Review Prompt](#cross-synthesis-review-prompt-anti-sycophancy-check) — synthesizers check each other
+13. [Chief Architect Reality Sync Prompt](#chief-architect-reality-sync-prompt) — after ship
+14. [Context Refresh Prompt](#context-refresh-prompt) — when sensing drift
 
-### Ontos Layer Mapping to This Playbook
+### Variables Reference
 
-| Ontos Layer | Playbook Artifact | Survives Rewrite? |
-|-------------|-------------------|-------------------|
-| `kernel` | Mission, values | ✅ Always |
-| `strategy` | STRATEGY.md | ✅ Always |
-| `product` | PRD.md, MASTER_PLAN.md | ✅ Always |
-| `atom` | VERSION_X_SPEC.md, Code | ❌ Disposable |
+Variables are provided in [session-variables.md](session-variables.md). When generating prompts, substitute these placeholders:
 
-### Tagging Playbook Docs for Ontos
-
-Add YAML frontmatter to each artifact so Ontos can track dependencies:
-
-```yaml
-# STRATEGY.md
----
-id: strategy
-type: strategy
-depends_on: [mission, problem_statement]
-status: approved
----
-```
-
-```yaml
-# PRD.md
----
-id: prd_v1
-type: product
-depends_on: [strategy]
-status: approved
----
-```
-
-```yaml
-# VERSION_1_SPEC.md
----
-id: v1_implementation_spec
-type: atom
-depends_on: [master_plan]
-status: in_progress
----
-```
-
-### Agent Activation Pattern
-Every agent interaction should start with:
-```
-"Activate Ontos" → Agent reads context map → Agent confirms what it loaded
-```
-
-### Session Archival
-After significant decisions:
-```
-"Archive Ontos" → Decisions logged → Context preserved for next session
-```
-
-Run `python3 ontos_init.py` or "Maintain Ontos" to rebuild the context map after creating/updating artifacts.
+| Variable | Description |
+|----------|-------------|
+| `{{PROJECT}}` | Project name |
+| `{{VERSION}}` | Current version being built |
+| `{{PREV_VERSION}}` | Previous version |
+| `{{PR_URL}}` | Pull request URL |
+| `{{BRANCH}}` | Git branch name |
+| `{{SPEC_PATH}}` | Path to current spec |
+| `{{PREV_SPEC_PATH}}` | Path to previous spec |
+| `{{REVIEW_PATH}}` | Where reviews are stored |
+| `{{TOOL_NAME}}` | Coding tool used |
+| `{{ROUND_NUMBER}}` | Current review iteration |
 
 ---
 
-## Anti-Sycophancy Prompt Patterns
+## Roles
 
-LLMs default to agreeing. Your prompts must force independent thinking.
+Each role has specific inputs and outputs. For human monitoring tasks (when to intervene, red flags), see [orchestrator-handbook.md](orchestrator-handbook.md#role-monitoring-guide).
+
+### 🎯 Strategist
+**What they do:** Challenge assumptions, find holes in strategy, ensure coherent vision
+**Input:** Initial strategy draft or idea
+**Output:** Refined strategy with challenged assumptions, identified risks, clearer positioning
+
+### 📋 Product Architect
+**What they do:** Translate strategy into structured PRD, define scope, write acceptance criteria
+**Input:** Approved strategy, feature priorities
+**Output:** PRD with user stories, success metrics, scope boundaries
+
+### 🏗️ Chief Architect
+**What they do:** Break PRD into technical phases, choose patterns, define system boundaries
+**Input:** Approved PRD
+**Output:** Master implementation plan, tech stack decisions, phase breakdown
+**Ongoing:** After each version ships, reviews codebase and updates Master Plan if reality drifted
+
+### 👷 Implementation Architect
+**What they do:** Create detailed specs for a single phase/version, iterate with fellow architects until convergence
+**Input:** Master plan section + previous version spec + current codebase state + session history
+**Output:** Detailed implementation plan that builds on what ACTUALLY exists
+**Iteration:** Reads fellow architect reviews, updates spec, flags tradeoffs for user decision
+
+### 🔨 Developer (Agentic)
+**What they do:** Write code, create PRs per the implementation spec
+**Input:** Finalized implementation spec
+**Output:** Working code, PR ready for review
+
+### 🔍 Code Reviewer
+**What they do:** Review PRs for bugs, security, adherence to plan
+**Input:** PR diff + original implementation plan
+**Output:** Approval or change requests with specific line citations
+
+### 😈 Adversarial Reviewer (CRITICAL ROLE)
+**What they do:** Actively try to find problems. Prompted to reject by default.
+**Input:** PR diff + implementation plan + other reviewers' approvals
+**Output:** List of concerns, edge cases, security issues, OR specific attestation of what was tested
+
+**Output Requirements:**
+1. Attack Vectors Tried: Specific list (not just "I tried to break it")
+2. Edge Cases Checked: Specific scenarios
+3. If No Issues Found: Explain what made the code resilient
+
+### 📝 Synthesizer
+**What they do:** Compress multiple review outputs into decision-ready summary
+**Input:** All reviewer outputs (Code Reviewer + Adversarial Reviewer)
+**Output:** One-page summary: what's approved, what's contested, what needs decision
+
+### 🐛 Debugger
+**What they do:** Diagnose and fix issues when things break
+**Input:** Error logs, reproduction steps, relevant code context
+**Output:** Diagnosis + fix PR
+
+### 🧪 QA Analyst
+**What they do:** Write test cases, validate against acceptance criteria
+**Input:** PRD acceptance criteria + working build
+**Output:** Test results, bug reports
+
+---
+
+## Workflow Phases
+
+```
+Phase 0: Strategy
+    ↓
+Phase 1: Product Definition → PRD.md
+    ↓
+Phase 2: Technical Planning → MASTER_PLAN.md
+    ↓
+┌─────────────────────────────────────┐
+│     FOR EACH VERSION/PHASE          │
+├─────────────────────────────────────┤
+│ Phase 3: Spec Convergence           │
+│     ↓                               │
+│ Phase 4: Development                │
+│     ↓                               │
+│ Phase 5: Code Review + Iteration    │
+│     ↓                               │
+│ Phase 6: Validation                 │
+└─────────────────────────────────────┘
+    ↓
+Phase 7: Post-Ship (Reality Sync)
+```
+
+### Spec Convergence Loop (Phase 3)
+
+```
+Implementation Architect writes spec
+            │
+            ▼
+    Fellow Architects review (initial)
+            │
+            ▼
+    Implementation Architect responds, updates spec
+            │
+            ▼
+    User reviews flagged tradeoffs, decides
+            │
+            ▼
+    Fellow Architects re-review ◄───┐
+            │                       │
+            ▼                       │
+      All CONVERGED? ──No───────────┘
+            │
+           Yes
+            ▼
+      Spec Finalization
+            │
+            ▼
+      Ready for Developer
+```
+
+### Code Review Loop (Phase 5)
+
+```
+Developer creates PR
+            │
+            ▼
+    Code Reviewer + Adversarial Reviewer
+            │
+            ▼
+    Synthesizers compress for decision
+            │
+            ▼
+    User decides: APPROVE or REQUEST CHANGES
+            │
+            ▼ (if REQUEST CHANGES)
+    Developer responds, pushes fixes
+            │
+            ▼
+    Reviewers re-review ◄───────────┐
+            │                       │
+            ▼                       │
+      APPROVE? ────No───────────────┘
+            │
+           Yes
+            ▼
+         MERGE
+```
+
+---
+
+## Anti-Sycophancy Patterns
+
+LLMs default to agreeing. These patterns force independent thinking.
+
+### Model-Specific Depth Triggers
+
+| Model | Depth Trigger | Disagreement Permission |
+|-------|---------------|------------------------|
+| **Claude (Opus)** | "ultrathink" | "keep your integrity" |
+| **Claude (Sonnet)** | "think carefully about this" | "challenge my assumptions" |
+| **GPT-4 / GPT-4 Turbo** | "think step by step, be thorough" | "tell me what's wrong with this" |
+| **Gemini** | "take your time, analyze deeply" | "what would you change" |
 
 ### Key Phrases That Force Divergence
 
@@ -121,779 +224,35 @@ LLMs default to agreeing. Your prompts must force independent thinking.
 | "What would you have done differently?" | Can't rubber-stamp—must propose alternatives |
 | "Keep your integrity" | Permission to disagree, even if other models approved |
 | "Be open-minded while keeping your integrity" | Balance: consider others, but don't just conform |
-| "Let's check... what else could have been added" | Forces additive thinking, not just validation |
-| "ultrathink" | Triggers extended reasoning (Claude), prevents fast pattern-matching |
-
-### Phrase Substitutions
-
-| Instead of... | Use... |
-|---------------|--------|
-| "Review this code" | "What would YOU have done differently?" |
-| "Check for bugs" | "Ultrathink. Try to break this." |
-| "Is this good?" | "What's missing that should be here?" |
-| "Any issues?" | "What concerns would a senior engineer raise?" |
-| "Approve or reject" | "RELUCTANT APPROVE or BLOCK—no easy approvals" |
-
-### The "Ultrathink" Pattern
-
-When you want deep analysis, not surface validation:
-```
-Ultrathink and review [X].
-
-1. How well does this match our plan? [forces spec comparison]
-2. What's missing? [forces critical evaluation]  
-3. What would YOU have done differently? [forces independent position]
-```
-
-This works because:
-- "Ultrathink" signals you want depth, not speed
-- Numbered questions prevent "looks good!" one-liners
-- "What would YOU do" requires taking a position, not just validating
-
-### Synthesis Cross-Review Prompt
-
-When multiple models have produced reviews/syntheses:
-```
-[Models A, B, and C], all acting as fellow architects, have reviewed 
-the implementation plan and left reviews in [location].
-
-Please ultrathink and review them. Carefully consider what we can:
-- Learn
-- Adopt
-- Refine
-- Ignore
-
-Be open-minded while keeping your integrity.
-```
-
-### Why "Fellow Architects" Not "Reviewers"
-Framing them as peers with equal authority prevents deference. "Reviewer" implies hierarchy; "fellow architect" implies each has valid independent judgment.
-
-### Model-Specific Notes
-_Track which models respond best to which anti-sycophancy patterns:_
-
-```
-Claude: 
-Gemini: 
-GPT: 
-```
-
----
-
-## Risk Acknowledgment: The No-Code-Review Model
-
-You've chosen to never review code yourself. This is a valid choice for solo development of simple apps, but be honest about the tradeoffs:
-
-### Where This Works
-- Single-feature applications
-- Low-stakes projects (not handling money, health, security)
-- Apps where "ship and fix" is acceptable
-- When you can validate by *using* the product, not reading the code
-
-### Where This Breaks
-- **LLM sycophancy**: Model B reviewing Model A's code often assumes A knew what it was doing. They catch syntax, miss logic.
-- **Synthesizer compression**: If 3 reviewers each flag a subtle issue differently, your summarizer might compress it to "minor concerns."
-- **No ground truth**: Bad architecture that works today becomes expensive tomorrow. You won't see it coming.
-- **Security**: LLMs miss vulnerabilities that humans catch. For anything touching auth, payments, or user data—consider paying a human to review.
-
-### Your Active Mitigations
-1. **Force independent judgment**: Prompts like "what would YOU have done differently" break rubber-stamping
-2. **Multi-synthesizer pattern**: Multiple models synthesize → then review each other's syntheses
-3. **Project Ontos**: Persistent context graph that all tools read from—ground truth survives tool switches
-4. **Adversarial Reviewer role**: One LLM prompted to reject by default
-5. **Spec-citation requirement**: Reviewers must map code to spec lines
-
----
-
-## The Team (LLM Roles)
-
-### 🎯 Strategist
-**What they do:** Pressure-test your strategy, find gaps, suggest pivots
-**Input:** Your rough problem statement, market observations
-**Output:** Refined strategy doc, risk flags, alternative approaches
-**Your job:** Accept/reject/refine their pushback
-
-### 📋 Product Architect  
-**What they do:** Translate strategy into structured PRD, define scope, write acceptance criteria
-**Input:** Approved strategy, your feature priorities
-**Output:** PRD with user stories, success metrics, scope boundaries
-**Your job:** Ensure it matches your vision, cut scope creep
-
-### 🏗️ Chief Architect
-**What they do:** Break PRD into technical phases, choose patterns, define system boundaries
-**Input:** Approved PRD
-**Output:** Master implementation plan, tech stack decisions, phase breakdown
-**Your job:** Sanity check complexity, approve phase boundaries
-**Ongoing:** After each version ships, Chief Architect reviews codebase and updates Master Plan if reality drifted from the plan. This keeps the Master Plan useful, not fictional.
-
-### 👷 Implementation Architect
-**What they do:** Create detailed specs for a single phase/version, then iterate with fellow architects until convergence
-**Input:** Master plan section + previous version spec + current codebase state + session history
-**Output:** Detailed implementation plan that builds on what ACTUALLY exists
-**Iteration:** Reads fellow architect reviews, updates spec, flags tradeoffs for your decision
-**Your job:** Decide on flagged tradeoffs; approve when converged
-**Key responsibility:** Flag any deviations between Master Plan and reality; recommend how to handle
-
-### 🔨 Developer (Agentic)
-**What they do:** Actually write code, create PRs
-**Input:** Implementation plan
-**Output:** Working code, PR ready for review
-**Your job:** Nothing—this runs autonomously
-
-### 🔍 Code Reviewer
-**What they do:** Review PRs for bugs, security, adherence to plan
-**Input:** PR diff + original implementation plan
-**Output:** Approval or change requests with specific line citations
-**Your job:** Read synthesis, break ties, final merge decision
-
-### 😈 Adversarial Reviewer (CRITICAL ROLE)
-**What they do:** Actively try to find problems. Prompted to reject by default.
-**Input:** PR diff + implementation plan + other reviewers' approvals
-**Output:** List of concerns, edge cases, security issues, or "I tried to break this and couldn't"
-**Your job:** If adversarial reviewer finds real issues, block merge
-**Why this exists:** Normal reviewers are biased toward approval. This one is biased toward rejection. Balance.
-
-### 📝 Synthesizer (Multi-Model Pattern)
-**What they do:** Compress multiple review outputs into decision-ready summary for you
-**Input:** All reviewer outputs (Code Reviewer + Adversarial Reviewer)
-**Output:** One-page summary: what's approved, what's contested, what needs your decision
-**Your job:** Read this instead of raw reviews. Make decisions.
-
-**Critical pattern:** Don't trust a single synthesizer.
-```
-Reviews ──► Synthesizer A (Claude) ──► Summary A
-        └─► Synthesizer B (Gemini) ──► Summary B
-                                           │
-                                           ▼
-                              You compare A vs B
-                              Disagreement = dig deeper
-```
-
-If Synthesizer A says "ready to merge" and Synthesizer B says "concerns about auth," that's a signal—not a tiebreaker for you to pick one.
-
-### 🐛 Debugger
-**What they do:** Diagnose and fix issues when things break
-**Input:** Error logs, reproduction steps, relevant code context
-**Output:** Diagnosis + fix PR
-**Your job:** Direct which errors to prioritize, approve fix approach
-
-### 🧪 QA Analyst
-**What they do:** Write test cases, validate against acceptance criteria
-**Input:** PRD acceptance criteria + working build
-**Output:** Test results, bug reports
-**Your job:** Prioritize which bugs matter
-
----
-
-## The Flow
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        YOUR INPUT REQUIRED                       │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  PHASE 0: Strategy                                               │
-│  ─────────────────                                               │
-│  You write: Problem statement, market thesis, rough vision       │
-│  Strategist: Challenges assumptions, refines, structures         │
-│  You: Accept/reject, finalize strategy doc                       │
-│                                                                  │
-│  Artifact: STRATEGY.md                                           │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  PHASE 1: Product Definition                                     │
-│  ──────────────────────────                                      │
-│  You: Define core features, priorities, constraints              │
-│  Product Architect: Writes full PRD with acceptance criteria     │
-│  You: Review, adjust scope, approve                              │
-│                                                                  │
-│  Artifact: PRD.md                                                │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  PHASE 2: Technical Planning                                     │
-│  ─────────────────────────                                       │
-│  Chief Architect: Creates master plan, breaks into versions      │
-│  You: Review phase boundaries, approve                           │
-│                                                                  │
-│  Artifact: MASTER_PLAN.md                                        │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-         ┌──────────────────────────────────────────┐
-         │         FOR EACH VERSION/PHASE          │
-         └──────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  PHASE 3: Implementation Planning + Convergence                  │
-│  ──────────────────────────────────────────────                  │
-│                                                                  │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │ Implementation Architect: Writes detailed spec          │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                          │                                       │
-│                          ▼                                       │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │ Fellow Architects: Review spec, leave feedback          │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                          │                                       │
-│                          ▼                                       │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │ Implementation Architect: Responds, updates spec        │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                          │                                       │
-│                          ▼                                       │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │ You: Review flagged tradeoffs, make decisions           │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                          │                                       │
-│                          ▼                                       │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │ Fellow Architects: Re-review updated spec           │◄──┐   │
-│  │ Output: CONVERGED or NEEDS ANOTHER ROUND            │   │   │
-│  └─────────────────────────────────────────────────────────┘   │   │
-│                          │                                     │   │
-│               ┌──────────┴──────────┐                          │   │
-│               ▼                     ▼                          │   │
-│          All CONVERGED      NEEDS ANOTHER ROUND ───────────────┘   │
-│               │                                                    │
-│               ▼                                                    │
-│  Artifact: VERSION_X_SPEC.md (approved)                            │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  PHASE 4: Development (Autonomous)                               │
-│  ─────────────────────────────────                               │
-│  Developer: Implements code, creates PR                          │
-│  You: Nothing—let it run                                         │
-│                                                                  │
-│  Artifact: Pull Request                                          │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  PHASE 5: Review + Iteration                                     │
-│  ────────────────────────────                                    │
-│                                                                  │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │  Code Reviewer: Reviews PR, comments on GitHub          │    │
-│  │  Adversarial Reviewer: Tries to break it, comments      │    │
-│  │  Synthesizers: Compress reviews for your decision       │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                          │                                       │
-│                          ▼                                       │
-│                 You: Review synthesis                            │
-│                    │                                             │
-│         ┌─────────┴─────────┐                                   │
-│         ▼                   ▼                                    │
-│      APPROVE             REQUEST CHANGES                         │
-│         │                   │                                    │
-│         │                   ▼                                    │
-│         │    ┌──────────────────────────────────┐               │
-│         │    │ Developer: Reads PR comments     │               │
-│         │    │ Implements fixes, pushes         │◄──┐           │
-│         │    └──────────────────────────────────┘   │           │
-│         │                   │                       │           │
-│         │                   ▼                       │           │
-│         │           Reviewers re-review ────────────┘           │
-│         │           (until approved)                            │
-│         │                                                        │
-│         └──────────────► MERGE                                  │
-│                                                                  │
-│  Gate: PR approved and merged                                    │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  PHASE 6: Validation                                             │
-│  ─────────────────                                               │
-│  QA Analyst: Tests against acceptance criteria                   │
-│  Debugger: Fixes critical issues                                 │
-│  You: Accept version as complete or define rework                │
-│                                                                  │
-│  Gate: Version shipped                                           │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-                    [Next version or DONE]
-```
-
----
-
-## Tool Assignment (Your Current Setup)
-
-Fill this in as you figure out what works. Format: `Role: Tool (notes)`
-
-| Role | Primary Tool | Backup Tool | Notes |
-|------|-------------|-------------|-------|
-| Strategist | | | Best for pushback, devil's advocate |
-| Product Architect | | | Needs to be thorough with acceptance criteria |
-| Chief Architect | | | Needs broad technical knowledge |
-| Implementation Architect | | | Detail-oriented, spec writing |
-| Developer | Antigravity / Cursor | Claude Code / Codex | Agentic, autonomous |
-| Code Reviewer | | | Different model than Developer |
-| Adversarial Reviewer | | | **Must be different model than Code Reviewer** |
-| Synthesizer | | | Good at compression without losing conflicts |
-| Debugger | | | Good at reading logs, suggesting fixes |
-| QA Analyst | | | Can reference PRD, systematic |
-
-### Critical Rule: Model Diversity in Review
-```
-Developer ──────────► Model A
-Code Reviewer ──────► Model B (different from A)
-Adversarial ────────► Model C (different from A and B)
-Synthesizer A ──────► Model A, B, or C
-Synthesizer B ──────► Different from Synthesizer A
-```
-If all reviewers use the same model family, they share blind spots.
-If both synthesizers are the same model, you lose the disagreement signal.
-
-### Model Strengths (Your Observations)
-
-_Add notes here as you learn which models excel at what:_
-
-```
-Claude: 
-Gemini: 
-GPT/Codex: 
-Other:
-```
-
----
-
-## Artifact Templates
-
-### STRATEGY.md
-```markdown
-# [Project Name] Strategy
-
-## Problem Statement
-What pain exists? For whom? Why now?
-
-## Market Thesis  
-Why will this work? What's the wedge?
-
-## Vision
-What does success look like in 1 year? 3 years?
-
-## Anti-Goals
-What are we explicitly NOT doing?
-
-## Key Risks
-What could kill this?
-```
-
-### PRD.md
-```markdown
-# [Project Name] PRD
-
-## Overview
-One paragraph: what is this?
-
-## Success Metrics
-How do we know it worked?
-
-## User Stories
-- As a [user], I want [goal] so that [reason]
-
-## Scope
-### In Scope (v1)
-### Out of Scope (later)
-### Never
-
-## Acceptance Criteria
-Specific, testable conditions for "done"
-```
-
-### MASTER_PLAN.md
-```markdown
-# [Project Name] Master Plan
-
-## Tech Stack
-- Frontend:
-- Backend:
-- Database:
-- Hosting:
-
-## Architecture Overview
-[High-level diagram or description]
-
-## Version Breakdown
-
-### v0.1 - Foundation
-Goal:
-Includes:
-Estimated complexity:
-
-### v0.2 - Core Feature
-...
-```
-
-### VERSION_X_SPEC.md
-```markdown
-# [Project Name] v[X] Implementation Spec
-
-## Goals for This Version
-What's shipping?
-
-## Technical Approach
-How will we build it?
-
-## File Structure
-```
-/src
-  /components
-  ...
-```
-
-## API Contracts
-Endpoints, request/response shapes
-
-## Data Models
-Schema definitions
-
-## Implementation Order
-1. First build...
-2. Then...
-
-## Testing Requirements
-What must be tested before PR?
-```
-
----
-
-## Quality Gates
-
-### Before Phase 3 (Implementation Planning)
-- [ ] Strategy approved by you
-- [ ] PRD reviewed and scope locked
-- [ ] Master plan phase boundaries make sense
-
-### Before Phase 4 (Development)
-- [ ] Implementation spec reviewed
-- [ ] No ambiguities that will cause agentic tool to hallucinate
-- [ ] Spec is detailed enough that Developer won't need to make judgment calls
-
-### Before Merge
-- [ ] Code Reviewer approved with spec citations
-- [ ] Adversarial Reviewer couldn't break it (or issues are addressed)
-- [ ] Synthesizer summary shows no unresolved conflicts
-- [ ] You've read synthesis and made decision
-
-### Before Shipping Version
-- [ ] Acceptance criteria validated by QA
-- [ ] Critical bugs fixed
-- [ ] You've actually used it yourself
-
----
-
-## Orchestration Efficiency
-
-You're the manual trigger for everything. Here's how to minimize friction:
-
-### Session Management (with Ontos)
-
-**Starting a session:**
-```
-1. Open your tool (Claude Code, Cursor, Gemini CLI, etc.)
-2. Say: "Activate Ontos"
-3. Agent reads Context Map, loads relevant history
-4. You're caught up without re-explaining
-```
-
-**Ending a session:**
-```
-1. Say: "Archive Ontos"
-2. Agent saves decisions and context changes
-3. Next session picks up where you left off
-```
-
-**After creating/updating artifacts:**
-```
-1. Say: "Maintain Ontos"
-2. Context map rebuilds with new dependencies
-```
-
-### Continuous Orchestration (Your Workflow)
-
-You work throughout the day, triggering agents as needed. Each tab = one role. No context switching within a tab.
-
-**Setup:**
-- Tab 1: Chief Architect / Implementation Architect
-- Tab 2: Developer (Antigravity / Cursor / Claude Code)
-- Tab 3: Code Reviewers
-- Tab 4: Synthesis / Cross-review
-
-**Each tab starts with:** "Activate Ontos" — so it has the full context graph.
-
-**Tab discipline:** If Tab 1 is your architect, it stays architect. Don't ask it to debug. Open a new tab for that.
-
-### What to Copy-Paste at Each Handoff
-
-| Handoff | What You Give Next Agent | Ontos Command |
-|---------|-------------------------|---------------|
-| Start session | — | "Activate Ontos" |
-| Strategy → Product Architect | STRATEGY.md (full) | — |
-| PRD → Chief Architect | PRD.md (full) | — |
-| **SPEC CONVERGENCE** | | |
-| Master Plan → Impl Architect | Master Plan section + prev spec path + "read codebase" | — |
-| Impl Spec → Fellow Architects | Use Implementation Plan Review prompt | — |
-| Architect Reviews → Impl Architect | Use Impl Architect Response prompt | — |
-| Updated Spec → Fellow Architects | Use Fellow Architects Re-Review prompt | — |
-| (If NEEDS ANOTHER ROUND) | Use Impl Architect Iteration prompt | — |
-| (Repeat until all CONVERGED) | — | — |
-| Converged Spec → Impl Architect | Use Spec Finalization prompt | — |
-| **DEVELOPMENT** | | |
-| Finalized Spec → Developer | Use Development Initiation prompt | — |
-| **CODE REVIEW** | | |
-| PR → Code Reviewer | Use Code Review prompt | — |
-| PR → Adversarial Reviewer | Use Adversarial Review prompt | — |
-| All Reviews → Synthesizers | All reviewer outputs | — |
-| Synthesis → You | Read, decide: APPROVE or REQUEST CHANGES | — |
-| REQUEST CHANGES → Developer | Use Developer Response prompt | — |
-| Developer fixes → Reviewers | Use Code Reviewer Re-Review prompt | — |
-| (Repeat until APPROVE) | — | — |
-| **POST-MERGE** | | |
-| After merge | — | "Archive Ontos" |
-| After version ships → Chief Architect | Use Reality Sync prompt | — |
-| After Reality Sync | Update MASTER_PLAN.md | "Maintain Ontos" |
-
-### Done Criteria (When to Stop Iterating)
-
-| Phase | It's Done When... |
-|-------|-------------------|
-| Strategy | You believe it, and Strategist couldn't poke fatal holes |
-| PRD | Acceptance criteria are specific enough to test |
-| Master Plan | Phase boundaries feel shippable, not arbitrary |
-| Impl Spec (initial) | Implementation Architect has written complete spec |
-| Spec Convergence | All architects agree; no blocking concerns; tradeoffs decided |
-| Code | PR exists and tests pass |
-| Review Iteration | Developer addressed all feedback; reviewers have no new concerns |
-| Review | Synthesis says "ready" with no unresolved conflicts |
-| Version | You used it and it works |
-
-### After Version Ships (Reality Sync)
-
-Before starting the next version:
-
-1. **Archive the session** — "Archive Ontos" to capture decisions
-2. **Run Reality Sync** — Chief Architect compares codebase to Master Plan
-3. **Update Master Plan** — Apply Chief Architect's recommended changes
-4. **Maintain Ontos** — Rebuild context map with updated artifacts
-
-This keeps your Master Plan useful. Without this step, the plan becomes fiction and the Implementation Architect has to do all the reality-checking.
-
-### When to Escalate (Your Judgment Required)
-
-These situations need you, not more LLM passes:
-- Reviewers disagree and neither is obviously wrong
-- Adversarial reviewer found something, but you're not sure if it matters
-- Agentic developer is stuck in a loop
-- The spec was ambiguous and the developer guessed wrong
-- Something works but feels wrong (trust this instinct)
-
----
-
-## Spec Convergence Protocol
-
-Implementation plan review takes the most time—more than coding itself. This is correct. Bad specs create bad code. Invest here.
-
-### The Pattern
-
-```
-Implementation Architect writes spec
-            │
-            ▼
-    ┌───────────────────┐
-    │  Fellow Architects│ ◄── Multiple architects review (initial)
-    │  Review (Initial) │     Each writes feedback (MD files)
-    └───────────────────┘
-            │
-            ▼
-    ┌───────────────────┐
-    │  Implementation   │     Reads all reviews
-    │  Architect        │     Updates spec
-    │  Responds         │     Flags tradeoffs for your decision
-    └───────────────────┘
-            │
-            ▼
-    ┌───────────────────┐
-    │  You Review       │     Decide on flagged tradeoffs
-    │  Tradeoffs        │     
-    └───────────────────┘
-            │
-            ▼
-    ┌───────────────────┐
-    │  Fellow Architects│     Check if concerns addressed
-    │  Re-Review        │◄─┐ Output: CONVERGED or NEEDS ANOTHER ROUND
-    └───────────────────┘  │
-            │              │
-            ▼              │
-      All CONVERGED? ──No──┤
-            │              │
-            │    ┌─────────┴─────────┐
-            │    │ Implementation    │
-            │    │ Architect         │
-            │    │ Iteration         │
-            │    └───────────────────┘
-           Yes
-            │
-            ▼
-      Spec is ready for Developer
-```
-
-### What "Convergence" Means
-
-You're not building false consensus. You're iterating until:
-- All architects agree THIS approach is better than alternatives
-- Ambiguities are resolved (coding agent won't have to guess)
-- Disagreements are either resolved or explicitly deferred
-
-**Typical:** 3 rounds
-**Complex topics:** 5 rounds
-**If >5 rounds:** The scope is too big. Split the version.
-
-### How to Run Convergence
-
-**Step 1 — Fellow Architects Review (Initial):**
-```
-[Architect A], [Architect B], and [Architect C] are fellow architects.
-
-Here is the implementation plan for {{VERSION}}: {{SPEC_PATH}}
-
-Each of you: review independently. What would you do differently?
-Don't coordinate. I want your individual perspectives.
-
-Save your reviews to: {{REVIEW_PATH}}
-```
-
-**Step 2 — Implementation Architect Responds:**
-```
-Use the "Implementation Architect Response to Review Prompt"
-
-Implementation Architect reads all reviews, updates spec, flags tradeoffs.
-```
-
-**Step 3 — You Review Tradeoffs:**
-- Read the updated spec's revision history
-- Decide on any flagged tradeoffs
-- Tell Implementation Architect your decisions
-
-**Step 4 — Fellow Architects Re-Review:**
-```
-Use the "Fellow Architects Re-Review Prompt"
-
-Each architect checks if their concerns were addressed.
-They output: CONVERGED or NEEDS ANOTHER ROUND
-```
-
-**Step 5 — Check Convergence:**
-- If all architects say CONVERGED → Spec is ready for Developer
-- If any say NEEDS ANOTHER ROUND → Implementation Architect uses Iteration Prompt, then back to Step 4
-
-**Typical:** 3 rounds (Steps 2-4 repeated twice after initial review)
-**Complex:** 5 rounds
-**If >5:** Scope is too big. Split the version.
-
-### Exit Criteria
-
-Spec is ready when ALL of these are true:
-- [ ] No architect has blocking concerns
-- [ ] Every "what would you do differently" has been addressed or explicitly deferred
-- [ ] A coding agent reading this spec would not need to make judgment calls
-- [ ] Acceptance criteria are specific enough to test
-
-### When to Defer (Not Resolve)
-
-Some disagreements don't need resolution before coding:
-- Style preferences (tabs vs spaces level stuff)
-- Optimizations that can be done later
-- Features explicitly out of scope for this version
-
-Log deferrals in the spec: "DEFERRED: [issue] - will address in v{{NEXT_VERSION}}"
-
----
-
-## Handoff Kit
-
-The goal: **Input variables once → Get ready-to-paste prompt.**
-
-Your friction isn't the prompts themselves—it's finding them, copy-pasting, then manually updating URLs, PR numbers, version numbers, etc. This kit solves that.
-
-### Variable Reference
-
-These variables appear across prompts. Collect them once per session/task:
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `{{VERSION}}` | Current version number | `v2.8.1` |
-| `{{PREV_VERSION}}` | Previous version number | `v2.8.0` |
-| `{{PR_URL}}` | Pull request URL | `https://github.com/user/repo/pull/24` |
-| `{{PR_NUMBER}}` | Just the PR number | `24` |
-| `{{BRANCH}}` | Current branch name | `feat/v2.8-session-logging` |
-| `{{SPEC_PATH}}` | Path to current implementation spec | `.ontos-internal/strategy/v2.8/VERSION_2.8.1_SPEC.md` |
-| `{{PREV_SPEC_PATH}}` | Path to previous version's spec | `.ontos-internal/strategy/v2.8/VERSION_2.8.0_SPEC.md` |
-| `{{REVIEW_PATH}}` | Path to review outputs | `.ontos-internal/strategy/proposals/v2.9/` |
-| `{{TOOL_NAME}}` | Which tool wrote the code | `Antigravity (Claude Opus 4.5)` |
-| `{{PROJECT}}` | Project name | `Project Ontos` |
-| `{{ROUND_NUMBER}}` | Current review iteration | `2` |
-
-### Quick-Start: The Generator Prompt
-
-Paste this to any LLM at the start of a work session:
-
-```
-I'm starting a work session. Generate my handoff prompts for today.
-
-Project: {{PROJECT}}
-Current Version: {{VERSION}}
-Previous Version: {{PREV_VERSION}}
-Branch: {{BRANCH}}
-PR URL (if exists): {{PR_URL}}
-Current Spec Location: {{SPEC_PATH}}
-Previous Spec Location: {{PREV_SPEC_PATH}}
-Review Location: {{REVIEW_PATH}}
-Coding Tool: {{TOOL_NAME}}
-
-Based on my LLM Development Playbook, generate ready-to-paste prompts for:
-
-**Spec Convergence Phase:**
-1. Implementation Architect (writing the spec)
-2. Implementation Plan Review (for fellow architects - initial)
-3. Implementation Architect Response to Review
-4. Fellow Architects Re-Review
-5. Implementation Architect Iteration (for round 2+)
-6. Spec Finalization (after convergence)
-
-**Development Phase:**
-7. Development Initiation (kick off coding)
-
-**Code Review Phase:**
-8. Code Review (for reviewers - initial)
-9. Adversarial Review
-10. Developer Response to Review
-11. Code Reviewer Re-Review
-12. Developer Iteration (for round 2+)
-
-**Synthesis & Post-Ship:**
-13. Synthesis Cross-Review
-14. Chief Architect Reality Sync (if version just shipped)
-
-Use my exact variable values above. Output each prompt in a code block I can copy.
-```
-
-This front-loads the variable collection. You do it once, get all prompts ready.
-
-### Alternative: Manual Prompt Assembly
-
-If you prefer to grab prompts individually, use the templates below. Replace `{{VARIABLES}}` with your actual values.
+| "ultrathink" | Triggers extended reasoning (Claude), prevents pattern-matching |
+
+### Anti-Sycophancy Phrase Upgrades
+
+| Weak Version | Strong Version |
+|--------------|----------------|
+| "Review this code" | "Find three things wrong with this code. If you can't find three, explain why each obvious concern doesn't apply." |
+| "Is this approach good?" | "Argue against this approach. Then argue for it. Then tell me which argument is stronger." |
+| "Any feedback?" | "What would you change if you were starting fresh? What would you keep exactly as-is and why?" |
+| "Please review" | "Review this as if your reputation depends on finding issues others missed." |
+| "What do you think?" | "Take a position. I want YOUR view, not a balanced summary of options." |
+
+### Detecting Sycophantic Responses
+
+**Red Flags:**
+- Starts with "That's a great approach" or "You're absolutely right"
+- Review is shorter than the artifact being reviewed
+- No specific suggestions for changes
+- Says "I agree" without explaining WHY
+- Approves both options when asked to choose one
+
+**Test Questions:**
+1. "What would you have done differently if you started from scratch?"
+   - Sycophantic: "I would have done it very similarly to what you have."
+   - Genuine: "I would have [specific alternative] because [reasoning]."
+
+2. "What's the strongest argument AGAINST this approach?"
+   - Sycophantic: "There aren't many strong arguments against it."
+   - Genuine: "[Specific concern] because [reasoning]."
 
 ---
 
@@ -901,105 +260,111 @@ If you prefer to grab prompts individually, use the templates below. Replace `{{
 
 ### Strategist Prompt
 ```
-You are a strategy consultant reviewing my product thesis. Your job is to:
-1. Find holes in my logic
-2. Challenge assumptions I haven't validated
-3. Identify risks I'm not seeing
-4. Suggest alternatives if my approach is weak
+You are a strategic advisor. Your job is to challenge assumptions and find holes.
 
-Be direct. I don't need encouragement—I need to know if this will fail.
+I'm building {{PROJECT}}. Here's my current thinking:
+[paste strategy draft]
 
-Here's my strategy:
-[paste STRATEGY.md]
+Ultrathink and evaluate:
+1. What assumptions am I making that might be wrong?
+2. What risks am I not seeing?
+3. Who else has tried this? What can we learn from them?
+4. What's the strongest argument against this strategy?
+5. If this fails, what will be the most likely reason?
+
+Don't validate—challenge. I need you to find the holes before the market does.
 ```
 
 ### Product Architect Prompt
 ```
-You are a product manager writing a detailed PRD. Given the approved strategy below, create a comprehensive PRD including:
-- Clear scope boundaries (in/out/never)
-- User stories with acceptance criteria
-- Success metrics that are measurable
-- Edge cases and error states
+You are a product architect creating a PRD for {{VERSION}}.
 
-Be specific enough that an engineer could build from this without asking clarifying questions.
+Strategy: [paste STRATEGY.md or relevant section]
+Priorities: [feature priorities]
 
-Strategy:
-[paste STRATEGY.md]
+Create a PRD that includes:
+1. **Problem Statement**: What user problem are we solving?
+2. **User Stories**: As a [user], I want [goal], so that [benefit]
+3. **Acceptance Criteria**: Specific, testable conditions for each feature
+4. **Scope Boundaries**: What's IN and what's explicitly OUT
+5. **Success Metrics**: How we'll know this worked
+6. **Dependencies**: What must exist before this can be built
+
+Be specific. Vague acceptance criteria lead to vague implementations.
 ```
 
 ### Chief Architect Prompt
 ```
-You are a senior technical architect. Given this PRD, create a master implementation plan:
-- Recommend tech stack with justification
-- Break into shippable versions (aim for smallest useful increments)
-- Identify technical risks and mitigation
-- Define system boundaries and interfaces
+You are the Chief Architect creating a master implementation plan.
 
-Keep it simple. I'm a solo developer—don't over-engineer.
+PRD: [paste PRD.md]
 
-PRD:
-[paste PRD.md]
-```
+Create a technical plan that includes:
+1. **System Architecture**: High-level components and their relationships
+2. **Tech Stack Decisions**: What technologies and why
+3. **Phase Breakdown**: Split into implementable versions (v1, v2, v3...)
+4. **Phase Dependencies**: What must be built before what
+5. **Risk Areas**: Where are the technical unknowns?
 
-### Chief Architect Reality Sync Prompt (After Each Major Version)
-```
-We just shipped {{VERSION}}. Before planning the next version, sync the Master Plan with reality.
+For each phase/version, define:
+- What's included
+- What's the deliverable
+- What's the acceptance gate
 
-Review:
-1. The current codebase (what actually exists)
-2. Session logs from {{VERSION}} development (decisions made)
-3. The current MASTER_PLAN.md (what we said we'd build)
-
-Identify:
-## Deviations
-[Where does the codebase differ from what MASTER_PLAN.md says?]
-
-## Decisions That Should Be Documented
-[Choices made during implementation that future work depends on]
-
-## Master Plan Updates Needed
-[Specific edits to MASTER_PLAN.md to reflect reality]
-
-## Upcoming Version Implications
-[How does the current state affect plans for next versions?]
-
-Output the specific text changes needed for MASTER_PLAN.md.
-Don't just note "update section X"—show the actual new text.
+Be opinionated. Make decisions, don't list options.
 ```
 
 ### Implementation Architect Prompt
 ```
 You are a technical lead writing an implementation spec for {{VERSION}}.
 
-Context:
-- Master Plan (intended direction): [paste relevant section of MASTER_PLAN.md]
-- Previous version spec: {{PREV_SPEC_PATH}} (what was planned)
-- Recent session logs: Check .ontos-internal/session_logs/ for decisions made
+## Your Inputs
+- Master Plan: [paste relevant section of MASTER_PLAN.md]
+- Previous version spec: {{PREV_SPEC_PATH}}
+- Session logs: .ontos-internal/session_logs/ (decisions made previously)
 - Current codebase: Review the repo to see what actually exists
 
-Your job:
-1. First, understand the CURRENT STATE—what was actually built, not just planned
-2. Note any deviations between previous spec and actual implementation
-3. Write a spec for {{VERSION}} that builds on reality, not just the plan
+## Your Job
 
-Include in your spec:
-- Exact file structure (accounting for what already exists)
-- API contracts with request/response examples
-- Data models with field types
-- Step-by-step implementation order
-- What to test before PR
-- Any constraints inherited from previous implementation decisions
+### 1. Reality Check (BEFORE writing anything)
+- What does the codebase ACTUALLY look like right now?
+- How does it differ from what the Master Plan says?
+- What constraints exist from previous implementation decisions?
 
-Be detailed enough that an AI coding agent can implement without ambiguity.
-If a developer would need to make a judgment call, you haven't been specific enough.
+### 2. Assumptions (REQUIRED SECTION)
+List the key assumptions you're making about:
+- The existing codebase (what exists, what doesn't)
+- The runtime environment (Python version, available tools)
+- User behavior (how they'll invoke this, what input they'll provide)
+- External dependencies (network, filesystem, git)
 
-IMPORTANT: If the current codebase differs from the Master Plan, note the deviation 
-and decide whether to:
-a) Align this version with the Master Plan (refactor)
-b) Update the Master Plan to reflect reality (acknowledge drift)
-c) Work with reality as-is (pragmatic)
+For each assumption: What breaks if you're wrong? How to verify or handle failure?
 
-Flag these decisions clearly—I need to approve them.
+### 3. Detailed Spec
+Include:
+- **File Structure:** Exact files to create/modify (relative to repo root)
+- **API Contracts:** Request/response examples, not just descriptions
+- **Data Models:** Field names, types, constraints, defaults
+- **Implementation Order:** Numbered steps, with dependencies noted
+- **Error Handling:** What errors can occur, how to handle each
+
+### 4. Test Strategy (REQUIRED SECTION)
+Specify:
+- Unit tests: Which functions, which edge cases
+- Integration tests: Which workflows
+- Acceptance tests: How to verify the feature works end-to-end
+
+### 5. Developer Instructions (REQUIRED SECTION)
+Step-by-step for the coding agent:
+1. First, create...
+2. Then implement...
+3. Write tests for...
+4. Before creating PR, verify...
+
+## Critical Rules
+- Be SPECIFIC. If a developer would need to make a judgment call, you haven't specified enough.
+- If reality differs from Master Plan, flag the deviation and recommend: (a) refactor to match plan, (b) update plan to match reality, or (c) accept drift.
+- Do not defer decisions to the Developer. Make them here.
 ```
 
 ### Implementation Plan Review Prompt (Fellow Architects)
@@ -1013,22 +378,27 @@ You are a fellow architect reviewing this plan. Ultrathink and evaluate:
 1. **Reality Check**: Does this plan account for the CURRENT codebase, or does it 
    assume things that don't exist / ignore things that do?
 
-2. **Completeness**: Will a coding agent have all info needed, or will it have to guess?
+2. **Assumption Audit**: Review the Assumptions section.
+   - Are they all valid?
+   - What assumptions are MISSING that should be listed?
+   - Is the impact assessment correct for each?
 
-3. **Correctness**: Does this actually solve what the PRD requires?
+3. **Completeness**: Will a coding agent have all info needed, or will it have to guess?
 
-4. **Continuity**: Does this build sensibly on {{PREV_VERSION}}, or does it ignore 
+4. **Correctness**: Does this actually solve what the PRD requires?
+
+5. **Continuity**: Does this build sensibly on {{PREV_VERSION}}, or does it ignore 
    decisions/constraints from previous implementations?
 
-5. **Simplicity**: Is this overengineered? What could be simpler?
+6. **Risk Assessment**:
+   - What's the worst-case scenario if this ships as-is?
+   - What's the most LIKELY failure mode?
+   - What would you add to prevent these?
 
-6. **What would you have done differently?**
+7. **What would you have done differently?**
 
 Be specific. If you'd change the API design, show your alternative.
 If you'd use a different pattern, explain why.
-
-If the plan flags deviations from the Master Plan, evaluate whether the proposed 
-approach (refactor / update plan / work with reality) is the right call.
 
 Don't just validate—take a position. I need your independent technical judgment.
 
@@ -1036,8 +406,16 @@ Output:
 ## Assessment
 [Overall: Ready / Needs Revision / Major Rework]
 
+## Assumption Audit
+[Valid / Missing / Incorrect assumptions]
+
 ## Reality Alignment
 [Does this match what actually exists in the codebase?]
+
+## Risk Assessment
+- Worst case: [X]
+- Most likely failure: [Y]
+- Prevention: [Z]
 
 ## Ambiguities That Will Cause Problems
 [Places where the coding agent will have to guess]
@@ -1059,7 +437,7 @@ Read all reviews carefully. For each piece of feedback:
 
 1. **If you agree**: Update the spec to address it
 2. **If you disagree**: Write a brief response explaining why your approach is better
-3. **If it's a tradeoff**: Note both options and flag for my decision
+3. **If it's a tradeoff**: Note both options and flag for user decision
 
 After addressing all feedback:
 - Save the updated spec to {{SPEC_PATH}}
@@ -1069,7 +447,7 @@ After addressing all feedback:
   - v2: Addressed architect reviews (YYYY-MM-DD)
     - Changed X per [Architect A] feedback
     - Kept Y despite [Architect B] suggestion because [reason]
-    - FLAG FOR DECISION: [tradeoff that needs my input]
+    - FLAG FOR DECISION: [tradeoff that needs user input]
   ```
 
 Do NOT:
@@ -1120,7 +498,7 @@ Previous feedback has been addressed. Fellow architects have left new comments.
 Read the NEW feedback only. Address it following the same rules:
 - Agree → update spec
 - Disagree → explain why
-- Tradeoff → flag for my decision
+- Tradeoff → flag for user decision
 
 Update the revision history. Focus on the delta.
 
@@ -1185,45 +563,73 @@ When complete:
 - Description: Summarize what was implemented, reference the spec
 - Request review
 
+CRITICAL: Implement ONLY what's specified. If you think something should be 
+added or improved, STOP and ask. Do not make judgment calls.
+
 Do NOT:
 - Add features not in the spec (scope creep)
 - Skip tests to save time
 - Make architectural decisions—those were already made
 - Merge your own PR
-
-If you encounter blockers or the spec is unclear, stop and report. 
-Better to ask than to guess wrong.
 ```
 
 ### Code Reviewer Prompt
 ```
 {{TOOL_NAME}} has implemented {{VERSION}} per the implementation spec.
 
-Ultrathink and review this PR: {{PR_URL}}
+PR: {{PR_URL}}
+Spec: {{SPEC_PATH}}
 
-Evaluate:
-1. How well is it implemented based on our plan? Cite specific spec sections.
-2. What's missing that should have been included?
-3. What would YOU have done differently? (Don't just validate—take a position.)
+Ultrathink and review this PR.
 
-For each significant code block, map it to the spec section it implements.
+## Required Evaluation
 
-Format:
+### 1. Spec Compliance
+For each spec section, verify implementation:
+- [Section X.X] ✓ Implemented correctly
+- [Section X.X] ⚠ Deviation: [explain]
+- [Section X.X] ✗ Missing
+
+### 2. Test Coverage
+- Are edge cases from the spec tested?
+- Are error conditions tested?
+- Could a test pass while the feature is broken?
+- What's NOT tested that should be?
+
+### 3. Error Handling
+- Are all error paths handled?
+- Are error messages useful?
+- Is there appropriate logging for debugging?
+
+### 4. Risk Assessment
+- What could break in production that works in test?
+- What assumption is the code making that might be wrong?
+
+### 5. What I Would Do Differently
+- Take a position. Don't just validate.
+- Show alternatives if you have them.
+
+## Output Format
+
 ## Spec Compliance
-[Section X.X] ✓ Implemented correctly
-[Section X.X] ⚠ Deviation: [explain]
-[Section X.X] ✗ Missing
+[Checklist with section references]
 
-## What I Would Have Done Differently
-[Your independent technical judgment—not just validation]
+## Test Coverage Assessment
+- Coverage: [Good/Adequate/Insufficient]
+- Missing tests: [list]
 
 ## Issues Found
-[Severity: critical/medium/low]
+[Severity: Critical/Major/Minor]
+
+## Risk Assessment
+[What could go wrong]
+
+## What I Would Do Differently
+[Specific alternatives with rationale]
 
 ## Recommendation
 APPROVE / REQUEST CHANGES / BLOCK
-
-Implementation Spec: {{SPEC_PATH}}
+[With specific reasoning]
 ```
 
 ### Developer Response to Review Prompt
@@ -1234,7 +640,7 @@ Their feedback is in the PR comments. Read all comments carefully.
 
 For each piece of feedback:
 1. If you agree: implement the fix
-2. If you disagree: explain why in a reply comment, then wait for my decision
+2. If you disagree: explain why in a reply comment, then wait for user decision
 3. If you're unsure: ask for clarification in a reply comment
 
 After addressing all feedback:
@@ -1301,66 +707,107 @@ You are a security-minded engineer whose job is to FIND PROBLEMS in {{VERSION}}.
 
 Your default stance is to reject. You are looking for reasons this code should NOT be merged.
 
-Specifically hunt for:
-1. Edge cases the happy path ignores
-2. What happens with malformed input?
-3. What happens under load?
-4. What happens if external services fail?
-5. Security: injection, auth bypass, data leaks
-6. Race conditions or state management bugs
-7. Things that will break in production but work in dev
+PR: {{PR_URL}}
+Spec: {{SPEC_PATH}}
+Note: Other reviewers may have approved. Be skeptical.
 
-You have access to:
-- Implementation spec: {{SPEC_PATH}}
-- PR: {{PR_URL}}
-- Other reviewers' approvals (be skeptical of these)
+## Attack Vectors to Try (REQUIRED — list what you actually tested)
 
-Your output format:
-## Issues I Found
-[list each with severity and exploitation scenario]
+**Input Validation:**
+- Null/undefined input
+- Empty strings
+- Extremely long input
+- Special characters (SQL injection, XSS)
+- Boundary values (0, -1, MAX_INT)
+
+**State & Concurrency:**
+- Race conditions
+- State corruption from partial failures
+- Resource leaks (files, connections)
+
+**External Dependencies:**
+- Network timeout/failure
+- Disk full/permission denied
+- Dependency returns unexpected data
+
+**Security:**
+- Authentication bypass
+- Authorization bypass
+- Information leakage in errors
+- Secrets in logs
+
+## Output Format (REQUIRED — vague responses will be rejected)
+
+## Attack Vectors Tested
+[For EACH category above, specify what you tried and what happened]
+Example: "SQL injection in name field: Tried `'; DROP TABLE users; --` — properly escaped, no vulnerability"
+
+## Issues Found
+[Severity with exploitation scenario]
+- CRITICAL: [X] — Attacker could [Y] by doing [Z]
+- MAJOR: [X] — Edge case [Y] causes [Z]
 
 ## Edge Cases Not Handled
-[list]
+[Specific scenarios with reproduction steps]
 
-## Questions the Other Reviewers Should Have Asked
-[list]
+## Questions Other Reviewers Should Have Asked
+[Gaps in their review]
 
-## My Verdict
-BLOCK (with reasons) / RELUCTANT APPROVE (I tried hard and couldn't break it)
+## Verdict
+BLOCK (with specific requirements to unblock)
+— or —
+RELUCTANT APPROVE: "I tested [X, Y, Z]. The code handles them because [specific defenses]. I could not find a way to break this."
 
-Do NOT approve just because another reviewer did. Find your own problems.
+NOT ACCEPTABLE:
+- "Looks good"
+- "I tried to break it and couldn't" (without specifics)
+- Any response under 200 words
 ```
 
 ### Synthesizer Prompt
 ```
-You are preparing a decision summary for a non-technical product owner who will approve or reject this merge.
+You are preparing a decision summary for a product owner who will approve or reject this merge.
 
-You have multiple code reviews. Your job is to synthesize them into a clear decision document.
+They will NOT read the raw reviews. If you miss something, they'll never see it.
 
-CRITICAL RULES:
-1. If reviewers DISAGREE on anything, you must flag it prominently—do not smooth over conflicts
-2. If any reviewer found a security issue, it goes at the top
-3. Compress, but don't lose information that would change the decision
-4. The product owner will not read the raw reviews—if you miss something, they'll never see it
+## Inputs
+[Paste all reviewer outputs]
 
-Output format:
+## Critical Rules
+1. If reviewers DISAGREE, flag prominently — do not smooth over conflicts
+2. If ANY reviewer found a security issue, it goes at the TOP
+3. Compress, but don't lose decision-changing information
+4. Assess reviewer quality — flag shallow reviews
+
+## Output Format
+
 ## TL;DR
-[One sentence: Is this ready to merge? Yes/No/Conditional]
+[One sentence: Ready to merge? Yes / No / Conditional]
+
+## Reviewer Quality Assessment
+[Did any reviewer seem to rush? Give generic feedback? Miss obvious things?]
+- Code Reviewer: [Thorough/Adequate/Shallow]
+- Adversarial Reviewer: [Thorough/Adequate/Shallow]
+- Evidence: [Why you rated them this way]
+
+## Critical Issues (if any)
+[Security issues first, then blockers]
 
 ## Reviewer Consensus
 [What all reviewers agreed on]
 
 ## Conflicts Between Reviewers
-[Any disagreements—this section is REQUIRED even if empty]
-
-## Critical Issues (if any)
-[Anything that should block merge]
+[Where reviewers disagreed — THIS SECTION IS REQUIRED even if empty]
 
 ## Open Questions for Your Decision
-[Anything that needs the product owner's judgment call]
+[Anything that needs human judgment]
 
-Reviews to synthesize:
-[paste all reviews]
+## My Assessment
+[Your own view — not just synthesis of others]
+Is this ready to merge? What's your confidence level (High/Medium/Low)?
+
+## Recommendation
+MERGE / REQUEST CHANGES (specify what) / BLOCK (specify why)
 ```
 
 ### Cross-Synthesis Review Prompt (Anti-Sycophancy Check)
@@ -1389,97 +836,162 @@ Output:
 [Your own synthesis, informed by but not deferring to the others]
 ```
 
----
-
-## Session Management (Ontos Integration)
-
-Your decisions need to survive sessions. Integrate Ontos commands into your workflow.
-
-### Start of Session
+### Chief Architect Reality Sync Prompt
 ```
-"Activate Ontos"
+{{VERSION}} has shipped and merged.
+
+Your job: Update the Master Plan to reflect reality.
+
+## Your Inputs
+- Current Master Plan: MASTER_PLAN.md
+- What was supposed to be built: {{SPEC_PATH}}
+- What was actually merged: Review the codebase
+
+## Your Tasks
+
+1. **Reality Check**
+   - Does the codebase match what the Master Plan says should exist?
+   - Are there deviations (intentional pivots vs. accidental drift)?
+
+2. **Update Master Plan**
+   - Mark {{VERSION}} as complete
+   - Update any sections that no longer match reality
+   - Note any architectural decisions that emerged during implementation
+
+3. **Implications for Next Version**
+   - Does anything in the plan for future versions need to change?
+   - Are there new constraints from what was just built?
+
+## Output
+Updated MASTER_PLAN.md with:
+- {{VERSION}} marked complete
+- Reality-aligned descriptions
+- Notes on any drift and whether it was intentional
+- Updated guidance for upcoming versions
 ```
-Agent confirms what context it loaded. Verify it has the right layers for the task.
 
-### After Significant Decisions
-- Approved a major strategy change
-- Merged a version
-- Changed architectural direction
-
-```
-"Archive Ontos"
-```
-Decision rationale gets logged. Future agents (and future you) can understand why.
-
-### After Code Migrations
-When you rewrite atoms (e.g., Streamlit → Next.js):
-```
-"Maintain Ontos"
-```
-Rebuilds context map. Strategy and product layers stay intact; atom references update.
-
-### Session Log Location
-Archive logs live in: `.ontos-internal/session_logs/`
-
-Review these periodically. They're your project's institutional memory.
-
----
-
-## Iteration Log
-
-Track what you learn about your process:
-
-| Date | Observation | Change Made |
-|------|-------------|-------------|
-| | | |
-
----
-
-## Open Questions
-
-### Process Questions (Figure Out Over Time)
-- [ ] Which model is best at finding strategy holes?
-- [ ] Which model writes the cleanest specs?
-- [ ] Is LLM-on-LLM review actually catching bugs, or just theater?
-- [ ] Where do I still need to add human judgment?
-
-### Questions for LLM Colleagues: Metrics Integration
-
-The goal is to track outcomes, not just process. We need to measure whether this workflow actually produces good results, not just whether it runs smoothly.
-
-**Ask your LLM colleagues:**
+### Context Refresh Prompt
+Use when sensing the model is losing track of decisions or context.
 
 ```
-I want to track metrics for my development workflow. Options:
+Let's verify alignment before continuing.
 
-A) Extend Ontos session log schema
-   - Add fields to the YAML frontmatter (spec_rounds, review_rounds, bugs_found, etc.)
-   - Modify ontos_end_session.py to prompt for these
-   - Metrics live alongside session narrative
+Please summarize:
+1. **Decisions made this session** (bullet points, be specific)
+2. **Still open/unresolved** (what haven't we decided yet?)
+3. **Immediate next action** (what are we about to do?)
 
-C) Add a Retrospective section to existing log template
-   - New markdown section in the log template
-   - Filled in manually or via prompt at session end
-   - No schema changes needed
+I'll verify this matches my understanding.
+```
 
-Questions:
-1. Given Ontos's existing schema (id, type, status, event_type, concepts, impacts), 
-   which approach fits better architecturally?
+**Expected response format:**
+```
+## Session Summary
 
-2. What specific metrics would be most valuable to track?
-   - Spec revision rounds (before code)
-   - Code review rounds (after code)
-   - Bugs found in review vs. post-merge
-   - Time from spec start to merge
-   - Others?
+### Decided
+- Config merge uses read_user_config() at install time
+- --strict flag fails instead of silent fallback
+- filelock library for cross-platform locking
 
-3. How should these metrics roll up? Per-version summaries? Trends over time?
+### Still Open
+- Lock file location (.ontos.lock vs .ontos/.lock)
+- Whether --strict should be default in v4.0
 
-4. Should this integrate with decision_history.md or stay separate?
-
-Be specific about implementation. I need a concrete recommendation, not options.
+### Next Action
+- Write the config parsing section of the spec
 ```
 
 ---
 
-*This is a living document. Update it as you learn.*
+## Artifact Templates
+
+### STRATEGY.md Structure
+```markdown
+# Strategy: [Project Name]
+
+## Problem Statement
+[What user problem are we solving?]
+
+## Market Thesis
+[Why now? Why us?]
+
+## Core Insight
+[What do we believe that others don't?]
+
+## Success Criteria
+[How will we know this worked?]
+
+## Risks & Mitigations
+[What could go wrong? How do we prevent it?]
+```
+
+### PRD.md Structure
+```markdown
+# PRD: [Feature/Version Name]
+
+## Overview
+[One paragraph summary]
+
+## User Stories
+- As a [user], I want [goal], so that [benefit]
+
+## Acceptance Criteria
+[Specific, testable conditions]
+
+## Scope
+### In Scope
+[What's included]
+
+### Out of Scope
+[What's explicitly excluded]
+
+## Success Metrics
+[How we'll measure success]
+```
+
+### MASTER_PLAN.md Structure
+```markdown
+# Master Implementation Plan
+
+## Architecture Overview
+[System diagram, major components]
+
+## Tech Stack
+[Technologies chosen and why]
+
+## Version Roadmap
+
+### v1.0 — [Name]
+- Status: [Planned/In Progress/Complete]
+- Features: [list]
+- Acceptance gate: [criteria]
+
+### v2.0 — [Name]
+- Status: [Planned]
+- Features: [list]
+- Dependencies: [what must exist first]
+```
+
+### VERSION_X_SPEC.md Structure
+```markdown
+# Implementation Spec: {{VERSION}}
+
+## Assumptions
+[Required table of assumptions]
+
+## File Structure
+[Exact files to create/modify]
+
+## Implementation Details
+[API contracts, data models, etc.]
+
+## Test Strategy
+[Unit, integration, acceptance tests]
+
+## Developer Instructions
+[Step-by-step for coding agent]
+```
+
+---
+
+*This document is for LLMs. For human reference, see [orchestrator-handbook.md](orchestrator-handbook.md). For session variables, see [session-variables.md](session-variables.md).*
