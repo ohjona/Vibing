@@ -4,7 +4,7 @@ A lightweight system for solo developers to build software with LLM agents.
 
 ## What This Is
 
-Four files that help you orchestrate multiple LLMs:
+Five files that help you orchestrate multiple LLMs:
 
 | File | Audience | Purpose |
 |------|----------|---------|
@@ -12,6 +12,7 @@ Four files that help you orchestrate multiple LLMs:
 | `llm-development-playbook.md` | LLMs | Role definitions, prompt reference |
 | `orchestrator-handbook.md` | You | Decisions, emergencies, escalation |
 | `session-variables.md` | Both | Variable reference |
+| `CHANGELOG-v1.2.md` | You | Implementation decisions and rationale |
 
 ## How It Works
 
@@ -78,6 +79,7 @@ v1.2 replaces sequential convergence loops with parallel fan-out:
 ├── llm-development-playbook.md   # Reference for LLMs
 ├── orchestrator-handbook.md      # Reference for you
 ├── session-variables.md          # Variable definitions
+├── CHANGELOG-v1.2.md             # Implementation decisions and rationale
 └── README.md                     # You are here
 ```
 

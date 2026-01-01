@@ -5,6 +5,33 @@
 
 ---
 
+## Pre-Session Check (If continuing from previous work)
+
+If you shipped a feature in a previous session without doing Reality Sync:
+
+<details>
+<summary>Lazy Reality Sync Prompt</summary>
+
+```
+Before we start new work, let's sync reality.
+
+Last session we shipped: {{PREV_VERSION}}
+Spec was: {{SPEC_PATH}}
+
+Please:
+1. Review what was actually merged vs. what was planned
+2. Update MASTER_PLAN.md to reflect reality
+3. Note any drift or simplification opportunities
+
+Then we can discuss the new feature.
+```
+
+</details>
+
+- [ ] Reality synced (or N/A for first session)
+
+---
+
 ## Quick Status
 
 | Field | Value |

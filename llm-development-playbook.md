@@ -406,6 +406,12 @@ You are consolidating feedback from three critics who reviewed the same spec.
 ## Your Job
 Synthesize into unified feedback for the Architect.
 
+## Rules
+1. If Adversarial Critic says REJECT, default recommendation is NEEDS HUMAN DECISION
+2. If 2+ critics say MAJOR CONCERNS, recommendation is BLOCK
+3. Security/correctness issues from ANY critic go to Critical Issues
+4. Complexity concerns from Adversarial go in dedicated section
+
 ## Output Format
 
 ## Consolidated Feedback for {{VERSION}} Spec
