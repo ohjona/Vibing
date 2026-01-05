@@ -1,26 +1,13 @@
 # LLM Development Playbook v1.2
 
-> Prompt library and workflow reference for LLM-augmented development
+> Prompts and constraints for LLM-augmented development
 > Pattern: Parallel fan-out with single consolidation
-
----
-
-## How to Use This Document
-
-**Audience:** This document is for LLMs generating prompts. For human reference (emergencies, escalation, decision gates), see [orchestrator-handbook.md](orchestrator-handbook.md).
-
-**Primary workflow:** Use [session-template.md](session-template.md) for each feature. It provides ready-to-copy prompts with your session variables already templated.
-
-**When to use this playbook:**
-- Reference for role definitions and constraints
-- Understanding the parallel workflow pattern
-- Anti-sycophancy patterns and complexity constraints
 
 ---
 
 ## Quick Navigation
 
-### Roles (Simplified)
+### Roles
 [Architect](#architect) · [Critic](#critic) · [Developer](#developer) · [Reviewer](#reviewer) · [Chief Architect](#chief-architect) · [Consolidator](#consolidator)
 
 ### Prompts by Phase
@@ -29,28 +16,17 @@
 3. **Review:** Parallel Reviewers → Review Consolidator
 4. **Post-Ship:** Reality Sync
 
-### Key Differences from v1.1
-| Aspect | v1.1 | v1.2 |
-|--------|------|------|
-| Architect roles | 4 (Strategist, Product, Chief, Implementation) | 2 (Architect + Chief for major decisions) |
-| Spec review | Sequential convergence (3-5 rounds) | Parallel fan-out + 1 revision |
-| Code review | Sequential (4+ roles) | Parallel (2 roles) + consolidate |
-| Iteration cap | 3-5 rounds | 1 revision |
-| Session management | Static playbook + manual variables | Stateful session document |
-
 ---
 
 ## Roles
 
 ### Architect
 **What they do:** Write implementation specs, address critic feedback in one revision
-**Input:** Requirements, previous spec (if applicable), current codebase context
 **Output:** Detailed implementation spec with assumptions, test strategy, developer instructions
 **Constraint:** Design for THIS version only. No speculative abstractions. Must include Cut List.
 
 ### Critic
-**What they do:** Review specs from different angles (Standard, Technical, Adversarial)
-**Input:** Architect's spec
+**What they do:** Review specs from different angles
 **Output:** Verdict (APPROVE / NEEDS REVISION / MAJOR CONCERNS) with specific issues
 **Variants:**
 - **Standard (Claude):** Reality check, completeness, correctness, simplicity audit
@@ -59,33 +35,27 @@
 
 ### Developer
 **What they do:** Implement exactly what the spec says, create PR
-**Input:** Final approved spec, branch name
 **Output:** Working code, PR ready for review
 **Authority:** Can raise ComplexityFlag to refuse over-engineered specs
-**Constraint:** Write readable, concrete code. No cleverness. No scope creep.
 
 ### Reviewer
 **What they do:** Review PRs for correctness and spec compliance
-**Input:** PR diff, implementation spec
 **Output:** Verdict (APPROVE / REQUEST CHANGES / BLOCK) with specific issues
 **Variants:**
-- **Standard:** Spec compliance, code quality, test coverage, risk assessment
+- **Standard:** Spec compliance, code quality, test coverage
 - **Adversarial:** Complexity audit FIRST, security vectors, demanded changes
 
 ### Chief Architect
 **When used:** Major architectural decisions, Reality Sync after shipping
-**What they do:** Break PRD into phases, choose patterns, update Master Plan after each version
 **Constraint:** Default to boring technology. Justify any complexity.
 
 ### Consolidator
 **What they do:** Synthesize multiple critic or reviewer outputs into unified feedback
-**Input:** All critic/reviewer outputs
-**Output:** Prioritized list of issues, conflicts flagged, recommendation
 **Rule:** Side with pessimist — if Adversarial blocks, default is BLOCK
 
 ---
 
-## Workflow Overview
+## Workflow
 
 ```
 You write requirements
@@ -117,15 +87,11 @@ Review Consolidator
 Done → Reality Sync
 ```
 
-**Handoffs:** 6-8 per feature (down from 12-16)
-**Your decisions:** 2 clear gates
-**Model diversity:** Different models at each stage
-
 ---
 
-## Prompts Library
+## Prompts
 
-> All prompts are also available in [session-template.md](session-template.md) with ready-to-copy formatting.
+> **Placeholders:** Replace `{{PROJECT}}`, `{{VERSION}}`, `{{BRANCH}}`, `{{SPEC_PATH}}`, `{{PR_URL}}` with your values.
 
 ### Phase 1: Spec Creation
 
@@ -136,7 +102,7 @@ You are the Architect for {{PROJECT}} {{VERSION}}.
 
 ## Your Inputs
 - Requirements: [paste requirements]
-- Previous spec: {{PREV_VERSION}} (if applicable)
+- Previous spec: [if applicable]
 - Current codebase: [describe or attach relevant context]
 
 ## Your Job
@@ -196,7 +162,7 @@ Step-by-step for the coding agent:
 For every component: "What breaks if I delete this?" If nothing → don't build it.
 
 ## Next Steps
-At the end of your response, include:
+At the end, include:
 - Issues I'm uncertain about: [list any]
 - Assumptions that need validation: [list any]
 - Recommended action: [Proceed to Critic Review / Clarify requirements first]
@@ -253,11 +219,6 @@ Review this spec for issues. Be thorough but constructive.
 
 ## Questions for Architect
 [Anything unclear]
-
-## Next Steps
-- If APPROVE: Proceed to consolidation
-- If NEEDS REVISION: [specific changes required]
-- If MAJOR CONCERNS: [what must be resolved before proceeding]
 ```
 
 #### Critic Prompt — Technical (Gemini)
@@ -308,11 +269,6 @@ Review this spec with focus on technical correctness and feasibility.
 
 ## Questions
 [Clarifications needed]
-
-## Next Steps
-- If APPROVE: Proceed to consolidation
-- If NEEDS REVISION: [specific changes required]
-- If MAJOR CONCERNS: [what must be resolved]
 ```
 
 #### Critic Prompt — Adversarial (GPT)
@@ -335,7 +291,6 @@ Hunt for unnecessary complexity with rigor:
 - Code for scenarios not in requirements?
 - Interfaces with only one implementation?
 - Config options with one value?
-- Extension points with no extensions?
 → Demand deletion
 
 **Resume-Driven Development:**
@@ -347,17 +302,14 @@ Hunt for unnecessary complexity with rigor:
 **Premature Abstraction:**
 - Utilities used only once?
 - Base classes with single child?
-- Helpers that obscure rather than clarify?
 → Demand inlining
 
 ### 2. Assumption Attack
 - Which assumptions are weakest?
 - What happens when each fails?
-- What's not being said?
 
 ### 3. Edge Cases
 - What inputs would break this?
-- What happens under load?
 - Failure modes not handled?
 
 ### 4. Security Surface
@@ -388,10 +340,6 @@ For each major component: What breaks if deleted?
 ## Residual Concerns
 [Issues that remain even if demands met]
 
-## Next Steps
-- If REJECT: [what must change before I'd approve]
-- If RELUCTANT APPROVE: [conditions and residual risks accepted]
-
 NOT ACCEPTABLE: "Looks good" or vague approval. Minimum 300 words.
 ```
 
@@ -403,18 +351,15 @@ You are consolidating feedback from three critics who reviewed the same spec.
 ## Critic Reviews
 [Paste all three critic outputs]
 
-## Your Job
-Synthesize into unified feedback for the Architect.
-
 ## Rules
-1. If Adversarial Critic says REJECT, default recommendation is NEEDS HUMAN DECISION
-2. If 2+ critics say MAJOR CONCERNS, recommendation is BLOCK
-3. Security/correctness issues from ANY critic go to Critical Issues
-4. Complexity concerns from Adversarial go in dedicated section
+1. If Adversarial Critic says REJECT → recommendation is NEEDS HUMAN DECISION
+2. If 2+ critics say MAJOR CONCERNS → recommendation is BLOCK
+3. Security/correctness issues from ANY critic → Critical Issues
+4. Complexity concerns from Adversarial → dedicated section
 
 ## Output Format
 
-## Consolidated Feedback for {{VERSION}} Spec
+## Consolidated Feedback
 
 ### Critical Issues (raised by multiple critics OR any security/correctness issue)
 [List each with which critics raised it]
@@ -426,18 +371,15 @@ Synthesize into unified feedback for the Architect.
 [Where critics disagreed — flag for human decision]
 
 ### Complexity Concerns
-[Anything flagged by Adversarial reviewer]
-
-### Questions Requiring Clarification
-[Aggregated from all critics]
+[From Adversarial reviewer]
 
 ## Overall Assessment
-- Critics agreeing: [count] APPROVE / [count] NEEDS REVISION / [count] MAJOR CONCERNS
+- Critics: [count] APPROVE / [count] NEEDS REVISION / [count] MAJOR CONCERNS
 - Recommendation: [PROCEED TO REVISION / NEEDS HUMAN DECISION / BLOCK]
 
 ## For Architect
-Address these specific items in your revision:
-1. [Most critical item]
+Address these items in your revision:
+1. [Most critical]
 2. [Second priority]
 3. [Third priority]
 ```
@@ -457,10 +399,10 @@ You are the Architect revising your spec for {{PROJECT}} {{VERSION}}.
 Address the feedback in ONE revision pass.
 
 ### Rules
-1. For each Critical Issue: Fix it or explain why it's not an issue (with evidence)
+1. For each Critical Issue: Fix it or explain why it's not an issue
 2. For each Recommended Change: Accept or reject with reasoning
 3. For Conflicting Assessments: Make a decision and justify
-4. For Complexity Concerns: Remove the complexity OR cite specific requirement that necessitates it
+4. For Complexity Concerns: Remove the complexity OR cite specific requirement
 5. "Future flexibility" is NOT a valid justification
 
 ## Output Format
@@ -478,10 +420,6 @@ Address the feedback in ONE revision pass.
 
 ## Remaining Concerns
 [Anything you couldn't fully address — flag for human]
-
-## Next Steps
-- If all critical issues addressed: Ready for Development
-- If blockers remain: [what human needs to decide]
 ```
 
 ---
@@ -496,7 +434,6 @@ You are the Developer for {{PROJECT}} {{VERSION}}.
 ## Your Inputs
 - Implementation Spec: [paste Final Spec]
 - Branch: {{BRANCH}}
-- Target: Create a PR when complete
 
 ## Your Job
 Implement exactly what the spec says. Nothing more, nothing less.
@@ -507,7 +444,7 @@ Implement exactly what the spec says. Nothing more, nothing less.
 3. Commit incrementally
 4. Write tests as specified
 
-### Constraints: Code for Humans
+### Constraints
 
 **Readability:**
 - No metaprogramming unless spec requires it
@@ -541,15 +478,9 @@ I cannot implement [X] as specified because it violates [YAGNI/DRY/KISS]:
 Awaiting decision before proceeding.
 
 ### Output
-When complete:
-- Create PR to main branch
+When complete, create PR with:
 - Title: "{{VERSION}}: [brief description]"
 - Description: Reference the spec, summarize implementation
-
-## Next Steps
-- If complete: PR ready for review at [URL]
-- If ComplexityFlag raised: Awaiting human decision
-- If blocked: [what's blocking and what's needed]
 ```
 
 ---
@@ -598,11 +529,6 @@ For each spec section:
 
 ## Recommendations
 [Specific suggestions]
-
-## Next Steps
-- If APPROVE: Ready for consolidation
-- If REQUEST CHANGES: [specific changes required]
-- If BLOCK: [what must change]
 ```
 
 #### Adversarial Reviewer Prompt
@@ -623,7 +549,6 @@ Your DEFAULT STANCE is to reject. Find reasons this code should NOT be merged.
 **Speculative Generality:**
 - Code for scenarios not in spec?
 - Interfaces with one implementation?
-- Config with one value?
 → Demand deletion
 
 **Resume-Driven Development:**
@@ -644,7 +569,6 @@ Your DEFAULT STANCE is to reject. Find reasons this code should NOT be merged.
 
 **Input Validation:**
 - Null/empty/long inputs?
-- Special characters?
 - Boundary values?
 
 **State & Concurrency:**
@@ -670,14 +594,10 @@ Your DEFAULT STANCE is to reject. Find reasons this code should NOT be merged.
 [What you tried]
 
 ## Issues Found
-[With severity and exploitation scenario]
+[With severity]
 
 ## Demanded Changes
 [Specific requirements to unblock]
-
-## Next Steps
-- If BLOCK: [requirements to unblock]
-- If RELUCTANT APPROVE: [residual risks accepted]
 
 NOT ACCEPTABLE: Response under 300 words or vague approval.
 ```
@@ -697,7 +617,7 @@ Consolidate these two code reviews for {{VERSION}}.
 
 ## Output Format
 
-## Consolidated Review for {{VERSION}}
+## Consolidated Review
 
 ### Verdict Summary
 - Standard Reviewer: [APPROVE/REQUEST CHANGES/BLOCK]
@@ -713,11 +633,6 @@ Consolidate these two code reviews for {{VERSION}}.
 ### Recommended Fixes
 [Non-blocking improvements]
 
-### For Developer
-Address these items:
-1. [Priority 1]
-2. [Priority 2]
-
 ### Residual Risks (if recommending MERGE)
 [What's accepted]
 ```
@@ -726,7 +641,7 @@ Address these items:
 
 ### Phase 4: Post-Ship
 
-#### Chief Architect Reality Sync Prompt
+#### Reality Sync Prompt
 
 ```
 {{VERSION}} has shipped and merged.
@@ -741,29 +656,24 @@ Your job: Update the Master Plan to reflect reality.
 ## Your Tasks
 
 1. **Reality Check**
-   - Does the codebase match what the Master Plan says should exist?
-   - Are there deviations (intentional pivots vs. accidental drift)?
+   - Does the codebase match the Master Plan?
+   - Are there deviations (intentional vs. accidental)?
 
 2. **Complexity Audit**
-   - Did any unnecessary complexity ship despite review?
-   - Are there simplification opportunities for next version?
+   - Did any unnecessary complexity ship?
+   - Simplification opportunities for next version?
 
 3. **Update Master Plan**
    - Mark {{VERSION}} as complete
-   - Update any sections that no longer match reality
-   - Note any architectural decisions that emerged during implementation
+   - Update sections that no longer match reality
+   - Note architectural decisions that emerged
 
-4. **Implications for Next Version**
-   - Does anything in the plan for future versions need to change?
-   - Are there new constraints from what was just built?
-   - Are there simplification opportunities to add to next version scope?
+4. **Next Version Implications**
+   - Does anything planned need to change?
+   - New constraints from what was built?
 
 ## Output
-Updated MASTER_PLAN.md with:
-- {{VERSION}} marked complete
-- Reality-aligned descriptions
-- Notes on any drift and whether it was intentional
-- Simplification opportunities identified
+Updated MASTER_PLAN.md with {{VERSION}} marked complete and reality-aligned.
 ```
 
 ---
@@ -777,26 +687,26 @@ You are the Chief Architect creating a master implementation plan.
 
 PRD: [paste PRD.md]
 
-Create a technical plan that includes:
-1. **System Architecture**: High-level components and their relationships
+Create a technical plan:
+1. **System Architecture**: High-level components and relationships
 2. **Tech Stack Decisions**: What technologies and why
 3. **Phase Breakdown**: Split into implementable versions (v1, v2, v3...)
 4. **Phase Dependencies**: What must be built before what
-5. **Risk Areas**: Where are the technical unknowns?
+5. **Risk Areas**: Technical unknowns
 
 ## CONSTRAINT: The Simplicity Budget
 
 Default to BORING technology:
-- SQLite over PostgreSQL (unless >1M rows or concurrent writes)
-- Monolith over Microservices (unless independent scaling required)
-- Synchronous over Async (unless specific latency requirements)
+- SQLite over PostgreSQL (unless >1M rows)
+- Monolith over Microservices
+- Synchronous over Async
 - Standard library over dependencies (unless >50 lines equivalent)
 - In-process over Networked (no Redis/Celery for V1)
 
 **Complexity Justification Rule:**
-For every non-standard technology choice, include a "Complexity Tradeoff" section:
+For every non-standard choice, include:
 - Simple alternative considered
-- Why simple alternative fails (cite specific PRD requirement)
+- Why simple fails (cite specific PRD requirement)
 - Added maintenance burden
 - Removal plan if requirements change
 
@@ -809,8 +719,8 @@ Be opinionated. Make SIMPLE decisions.
 Let's verify alignment before continuing.
 
 Please summarize:
-1. **Decisions made this session** (bullet points, be specific)
-2. **Still open/unresolved** (what haven't we decided yet?)
+1. **Decisions made this session** (bullet points)
+2. **Still open/unresolved** (what haven't we decided?)
 3. **Immediate next action** (what are we about to do?)
 
 I'll verify this matches my understanding.
@@ -818,17 +728,17 @@ I'll verify this matches my understanding.
 
 ---
 
-## Complexity Constraints Reference
+## Complexity Constraints
 
-### YAGNI (You Aren't Gonna Need It)
+### YAGNI
 - No generic interfaces until 3+ implementations exist
 - No config options for single values
-- No plugin systems unless PRD explicitly requires it
+- No plugin systems unless PRD requires it
 - If you write "this will allow us to easily..." — STOP and delete it
 
 ### Boring Tech Defaults
-| Complex Option | Simple Default | Use Complex When |
-|----------------|----------------|------------------|
+| Complex | Simple Default | Use Complex When |
+|---------|----------------|------------------|
 | PostgreSQL | SQLite | >1M rows, concurrent writes |
 | Microservices | Monolith | Independent scaling required |
 | Async | Sync | Specific latency requirements |
@@ -837,12 +747,12 @@ I'll verify this matches my understanding.
 
 ### The Deletion Test
 For every component: "What breaks if I delete this?"
-- If nothing breaks → Don't build it
-- If only future features break → Don't build it
-- If only "cleanliness" breaks → Don't build it
+- If nothing → Don't build it
+- If only future features → Don't build it
+- If only "cleanliness" → Don't build it
 
 ### ComplexityFlag Triggers
-Developer should refuse to implement:
+Developer should refuse:
 - Plugin system with no concrete plugins
 - Interface with only one implementation
 - Config system for hardcoded values
@@ -852,75 +762,26 @@ Developer should refuse to implement:
 
 ## Anti-Sycophancy Patterns
 
-### Key Phrases That Force Divergence
+### Phrases That Force Divergence
 | Pattern | Why It Works |
 |---------|--------------|
 | "What would you have done differently?" | Must propose alternatives |
 | "Keep your integrity" | Permission to disagree |
-| "ultrathink" | Triggers extended reasoning |
 | "Find three things wrong with this" | Forces critical analysis |
 
-### Detecting Sycophantic Responses
-**Red Flags:**
-- Starts with "That's a great approach" or "You're absolutely right"
+### Red Flags (Sycophantic Response)
+- Starts with "That's a great approach"
 - Review shorter than artifact being reviewed
 - No specific suggestions for changes
-- Says "I agree" without explaining WHY
 - Approves both options when asked to choose one
 
-### Anti-Sycophancy Phrase Upgrades
+### Stronger Prompts
 | Weak | Strong |
 |------|--------|
-| "Review this code" | "Find three things wrong. If you can't, explain why each concern doesn't apply." |
-| "Is this approach good?" | "Argue against this, then for it, then tell me which argument is stronger." |
-| "Any feedback?" | "What would you change if starting fresh? What would you keep exactly as-is?" |
+| "Review this code" | "Find three things wrong" |
+| "Is this approach good?" | "Argue against this, then for it, then tell me which is stronger" |
+| "Any feedback?" | "What would you change if starting fresh?" |
 
 ---
 
-## Artifact Templates
-
-### VERSION_SPEC.md Structure
-```markdown
-# Implementation Spec: {{VERSION}}
-
-## Assumptions
-[Required table of assumptions with impact if wrong]
-
-## Product Scope
-- Problem Statement
-- Scope Boundaries
-- Cut List
-
-## File Structure
-[Exact files to create/modify]
-
-## Implementation Details
-[API contracts, data models]
-
-## Test Strategy
-[Unit, integration, acceptance tests]
-
-## Developer Instructions
-[Step-by-step for coding agent]
-```
-
-### MASTER_PLAN.md Structure
-```markdown
-# Master Implementation Plan
-
-## Architecture Overview
-[System diagram, major components]
-
-## Tech Stack
-[Technologies with Complexity Tradeoffs for non-boring choices]
-
-## Version Roadmap
-### v1.0 — [Name]
-- Status: [Planned/In Progress/Complete]
-- Features: [list]
-- Acceptance gate: [criteria]
-```
-
----
-
-*For the stateful session workflow, use [session-template.md](session-template.md). For human reference on emergencies and escalation, see [orchestrator-handbook.md](orchestrator-handbook.md).*
+*For emergencies and escalation, see [orchestrator-handbook.md](orchestrator-handbook.md).*
