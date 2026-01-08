@@ -24,7 +24,10 @@ Generate these prompts:
 8. Standard Reviewer
 9. Adversarial Reviewer
 10. Review Consolidator
-11. Reality Sync (if version just shipped)
+11. Architect Review Response
+12. Developer Amendment
+13. Architect Final Review (uses Standard Reviewer prompt)
+14. Reality Sync (if version just shipped)
 
 Output each prompt in a code block I can copy.
 ```
@@ -58,14 +61,21 @@ Copy 2 Reviewer prompts → Send IN PARALLEL (Standard, Adversarial)
     ↓
 Copy Review Consolidator prompt → Synthesize
     ↓
+Copy Architect Review Response prompt → Evaluate feedback, update spec if needed
+    ↓
+Copy Developer Amendment prompt → Implement changes (if any)
+    ↓
+Copy Standard Reviewer prompt → Architect Final Review
+    ↓
 ★ GATE 2: Merge?
     ↓
 Copy Reality Sync prompt → Update Master Plan
 ```
 
-**Handoffs:** 6-8 per feature
+**Handoffs:** 8-10 per feature
 **Your decisions:** 2 gates
 **Parallel steps:** Critics (3 models), Reviewers (2 models)
+**No loops:** Final Review surfaces issues at Gate 2, doesn't restart cycle
 
 ---
 
@@ -95,6 +105,8 @@ If major issues persist after one revision:
 - **Fundamental disagreement** → You decide
 
 More rounds don't fix these. They defer the problem.
+
+**Final Review Rule:** If Architect Final Review finds issues, they surface at Gate 2. You decide to ship, defer, or descope. We do NOT loop back to Developer Amendment.
 
 ---
 

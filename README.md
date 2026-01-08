@@ -33,6 +33,8 @@ Developer → PR
     ↓
 2 Reviewers IN PARALLEL → Consolidate
     ↓
+Architect Review Response → Developer Amendment → Final Review
+    ↓
 ★ GATE 2: Merge?
 ```
 
