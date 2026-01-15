@@ -4,11 +4,11 @@ Fill these in at the start of each work session. The Generator Prompt will use t
 
 ```
 PROJECT:        Project Ontos
-VERSION:        v2.9.6
-PREV_VERSION:   v2.9.5
-BRANCH:         v2.9.6
-SPEC_PATH:      /Users/jonathanoh/Dev/Project-Ontos/.ontos-internal/strategy/proposals/v2.9.6/v2.9.6_Implementation_Specification.md
-PR_URL:         
+VERSION:        v3.0.0-alpha
+PREV_VERSION:   v2.9.6
+BRANCH:         v3.0.0-alpha
+SPEC_PATH:      /Users/jonathanoh/Dev/Project-Ontos/.ontos-internal/strategy/v3.0/Phase0-Golden-Master-Implementation-Spec.md
+PR_URL:         https://github.com/ohjona/Project-Ontos/pull/39
 ```
 
 ## Example
