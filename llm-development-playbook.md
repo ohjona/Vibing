@@ -549,12 +549,14 @@ Before sending any review prompt, verify:
 
 ### 7.6 Prompt Delivery Standards
 
-Every prompt is delivered as a separate file. Not inline in chat. Not in code blocks. Actual `.md` files the orchestrator can copy-paste into each model.
+**Hard rule: One prompt = one file.** Every prompt is delivered as a separate `.md` file. Not inline in chat. Not in code blocks. Not multiple prompts concatenated into one file. The orchestrator copies each file to the appropriate model — this only works if each prompt is its own self-contained document.
 
 **Delivery method:**
 1. Generate each prompt as a standalone `.md` file.
 2. Name files using convention: `[Version]_[Phase]_[Step]_[Role].md`
-3. Present all files at end for easy access.
+3. Present all files for easy access.
+
+**Why this matters operationally:** The orchestrator is copying prompts to 3-4 different model CLIs. Separate files make this mechanical: open file, copy, paste, done. Prompts embedded in chat or grouped into a single document create extraction overhead and increase the chance of copying the wrong content to the wrong model.
 
 **Examples:**
 - `v2.1_PhaseB_B1_Peer_Review.md`
@@ -570,14 +572,16 @@ Every prompt is delivered as a separate file. Not inline in chat. Not in code bl
 
 ### 7.7 Prompt Suite Delivery
 
-When entering a new phase, default to delivering the full suite upfront.
+At each phase transition, **ask the orchestrator** how they want prompts delivered for this phase.
 
 | Option | When Best | What's Delivered |
 |--------|-----------|-----------------|
-| **Full phase suite** | Approach is settled, ready to execute | All prompts for remaining steps |
-| **Next step only** | Uncertain about approach, need to iterate | Single prompt file |
+| **Full phase suite** | Straightforward project, approach is settled, ready to execute | All prompts for the phase, generated together with shared variables |
+| **Step by step** | Complex project, orchestrator wants to tailor each prompt, or earlier steps may change what later steps need | One prompt at a time, orchestrator requests the next when ready |
 
-**In practice, the orchestrator almost always wants the full suite.**
+**The CA should ask, not assume.** Different phases of the same project may warrant different approaches. Phase B on a simple patch might be full suite. Phase D on a complex feature with a large diff might be step by step so the orchestrator can adjust context and focus per reviewer.
+
+**What "full phase suite" means:** All prompts within a phase that share the same variables (branch name, PR number, spec version). This is NOT "generate every prompt for the entire workflow." It's the prompts for the current phase only.
 
 **Full suite contents by phase:**
 
@@ -1868,10 +1872,11 @@ These are post-hoc diagnoses — patterns you notice after a phase or release. F
 
 #### Prompt Generation (every phase transition)
 - [ ] Confirm branch name, PR number, spec version
-- [ ] Generate all prompts as separate .md files
+- [ ] Ask orchestrator: full phase suite or step by step?
+- [ ] Generate each prompt as its own .md file (hard rule)
 - [ ] Each prompt is self-contained
 - [ ] Context budget checked (30-60% of effective window)
-- [ ] Deliver full suite unless step-by-step requested
+- [ ] Deliver as separate files per 7.6
 
 ### 19.2 Quick Reference Cards
 
@@ -1903,7 +1908,7 @@ These are the "approved documents" referenced throughout this playbook.
 | 2.0 | 2026-01-15 | Added templates, phase variants, troubleshooting |
 | 3.0 | 2026-02-01 | Three-tier architecture. Project-agnostic rewrite. Added: Pre-Phase A workflows, spec deviation protocol, track-based implementation, process evaluation, one-revision cap decision matrix, verification protocols. Absorbed critique guide into Section 7. Removed: inline templates, automation architecture, signature blocks. |
 | 3.1 | 2026-02-06 | Added: Context Window Management (7.8), Mid-Phase Intervention (7.9). Expanded: Phase A and Phase C with process guidance and common failures. Added: Proposal Review iteration limits (13.4), parallel track criteria (15.4). Merged Section 16 into 6.3. Renumbered 17-20 → 16-19. |
-| 3.2 | 2026-02-06 | Compaction pass. Replaced 50-line ASCII diagram with compact workflow. Consolidated 7.9 intervention tables (seven separate tables → one). Eliminated Quick Reference duplicates (19.2-19.4 → cross-references). Tightened 7.8 prose throughout. Compressed version history. Trimmed redundant lead-ins and restated explanations across Sections 2, 7, 8, 10, 15. Net: 2,044 → 1,909 lines, zero content loss. |
+| 3.2 | 2026-02-06 | Compaction pass. Consolidated 7.9 intervention tables, eliminated Quick Reference duplicates, tightened prose throughout. Strengthened 7.6 file-per-prompt as hard rule with operational rationale. Rewrote 7.7 to ask orchestrator for delivery preference (full suite vs. step by step) instead of defaulting to full suite. Net: 2,044 → ~1,920 lines. |
 
 ---
 
