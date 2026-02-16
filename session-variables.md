@@ -33,6 +33,7 @@ See [Playbook §6](llm-development-playbook.md#6-project-setup) for full context
 |----------|-------------|-------|
 | **Current version** | Release version being worked on | |
 | **Phase variant** | Feature / Patch / Hotfix (§15) | |
+| **Orchestration tier** | Tier 1 (agent teams) / Tier 2 (guided) / Tier 3 (full manual) — based on risk characteristics, not version number (§15.5.1) | |
 | **Pre-Phase A needed?** | Triage / Proposal Review / Neither (§5.3) | |
 | **Track splitting?** | Monolithic / Track-based (§15.4) | |
 | **Number of tracks** | 2–4, one per independent work stream | |
@@ -41,6 +42,17 @@ See [Playbook §6](llm-development-playbook.md#6-project-setup) for full context
 | **PR number** | When exists — propagates across all prompts | |
 | **Spec version** | Current approved spec version | |
 | **Files in scope** | Focuses reviewers, especially for track-based work | |
+
+### Agent Team Variables (Tier 1 and Tier 2 only)
+
+> Only fill these in when orchestration tier is Tier 1 or Tier 2. (§15.5)
+
+| Variable | Description | Value |
+|----------|-------------|-------|
+| **Dev team platform** | Tool for development agent team (e.g., Codex CLI, Claude Code) | |
+| **Review team platform** | Tool for review agent team (e.g., Claude Code, Codex CLI) | |
+| **Dev team max agents** | Max developer agents (Tier 1: 2-3, Tier 2: up to 5) | |
+| **Agent team activation syntax** | Platform-specific spawn command if known (e.g., "spawn teammates" for Claude Code) | |
 
 ---
 
@@ -62,6 +74,7 @@ DEVELOPER_TOOL      = "Codex CLI"
 # Release Variables
 Current version     = "2.1.0"
 Phase variant       = "Feature"
+Orchestration tier  = "Tier 3 (full manual)"
 Pre-Phase A needed? = "Neither"
 Track splitting?    = "Monolithic"
 Number of tracks    = "—"
@@ -70,4 +83,33 @@ Base branch         = "main"
 PR number           = "#60"
 Spec version        = "v1.1"
 Files in scope      = "src/auth/, src/middleware/auth.ts, tests/auth/"
+
+# Agent Team Variables (Tier 1/2 only)
+Dev team platform   = "—"
+Review team platform = "—"
+Dev team max agents = "—"
+Agent team activation syntax = "—"
+```
+
+### Example: Tier 1 Patch
+
+```
+# Release Variables
+Current version     = "2.1.1"
+Phase variant       = "Patch"
+Orchestration tier  = "Tier 1 (agent teams)"
+Pre-Phase A needed? = "Neither"
+Track splitting?    = "Monolithic"
+Number of tracks    = "—"
+Branch name         = "fix/v2.1.1-export-regression"
+Base branch         = "main"
+PR number           = "—"
+Spec version        = "—"
+Files in scope      = "src/commands/export.py, src/core/export_data.py"
+
+# Agent Team Variables
+Dev team platform   = "Codex CLI"
+Review team platform = "Claude Code"
+Dev team max agents = "2"
+Agent team activation syntax = "spawn teammates (Claude Code), agent team (Codex)"
 ```

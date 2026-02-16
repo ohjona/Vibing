@@ -16,6 +16,7 @@ A multi-agent review workflow for LLM-augmented software development. Uses inten
 3. Each review phase uses **three specialized reviewers** (Peer, Alignment, Adversarial) running in parallel across different model families.
 4. The **Chief Architect** (human-directed) makes decisions at phase gates.
 5. **Prompts are generated fresh** per phase transition — self-contained, not reused from templates.
+6. For smaller patches, an **Agent Team Workflow** (§15.5) can replace manual orchestration with two coordinated agent teams (one per model family), reducing handoffs from 6+ to 3.
 
 ### Workflow
 
@@ -37,6 +38,24 @@ PHASE C: Implementation             PHASE D: Code Review
                                      D.6: CA approval → MERGE
 ```
 
+### Agent Team Workflow (Tier 1)
+
+For patches and low-risk changes, two agent teams replace manual orchestration:
+
+```
+Orchestrator (Claude web) generates two meta prompts
+        │
+        ├──► Codex Agent Team (CA + Developer agents)
+        │         Output: PR / diff
+        │
+        ├──► Claude Code Agent Team (3 reviewers + consolidator)
+        │         Output: Consolidated review
+        │
+        └──► Codex CA cross-check → Merge
+```
+
+See §15.5 for tier selection criteria and escalation triggers.
+
 ## Key Concepts
 
 | Concept | Summary | Reference |
@@ -47,3 +66,4 @@ PHASE C: Implementation             PHASE D: Code Review
 | **Document-Driven Review** | Reviews anchored to approved docs, not author framing | §2.4 |
 | **Fresh Prompt Generation** | Every prompt is self-contained and generated for the current step | §2.7 |
 | **Context Window Management** | Deliberate budgeting of context to keep models in the attention sweet spot | §7.8 |
+| **Orchestration Tiers** | Tier 1 (agent teams), Tier 2 (guided), Tier 3 (full manual) — based on risk, not version number | §15.5.1 |
