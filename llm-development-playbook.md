@@ -1,7 +1,7 @@
 # LLM Development Playbook: Multi-Agent Review Workflow
 
-**Version:** 3.2
-**Updated:** 2026-02-06
+**Version:** 3.3
+**Updated:** 2026-02-09
 **Based on:** Battle-tested patterns across 8+ release cycles
 
 ---
@@ -31,6 +31,7 @@
 13. [Pre-Phase A: Proposal Review](#13-pre-phase-a-proposal-review)
 14. [Spec Deviation Protocol](#14-spec-deviation-protocol)
 15. [Phase Variants](#15-phase-variants)
+   - [15.5 Agent Team Workflow](#155-agent-team-workflow)
 16. [Output Standards](#16-output-standards)
 17. [Process Evaluation](#17-process-evaluation)
 18. [Troubleshooting](#18-troubleshooting)
@@ -1649,6 +1650,215 @@ Phase A → Phase B → Approved Spec v1.1
 - Total scope is small enough for one context window
 - Sequential dependency (Track B can't start until Track A's code exists)
 
+### 15.5 Agent Team Workflow
+
+For releases executable by two agent teams (one per model family) with reduced manual orchestration. Replaces the human orchestrator as "message bus" between roles.
+
+**Prerequisites:** Claude Code Agent Teams enabled (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`), Codex with equivalent multi-agent capability, an orchestrator session (typically Claude web) for prompt generation.
+
+#### 15.5.1 Orchestration Tiers
+
+Select tier based on **risk characteristics**, not version number alone. Escalate when a patch touches higher-tier characteristics.
+
+| Tier | Default Mapping | Risk Characteristics | Orchestration Mode |
+|------|-----------------|---------------------|--------------------|
+| **Tier 1: Agent Team Review** | Patch (x.y.Z) | Few files, no API changes, no new subsystems, well-tested paths | Two agent teams, minimal human involvement |
+| **Tier 2: Guided Multi-Model** | Minor (x.Y.z) | New features, API surface changes, multiple subsystems, within established architecture | Agent teams with hands-on orchestrator guidance |
+| **Tier 3: Full Orchestration** | Major (X.y.z) | Architectural changes, new subsystems, breaking changes | Full playbook, manual orchestration, maximum model diversity |
+
+**Escalation triggers** (override default mapping):
+
+| If a Patch Touches... | Escalate To |
+|------------------------|-------------|
+| Public API surface | Tier 2 |
+| Core graph/data model logic | Tier 2 |
+| Multiple subsystems | Tier 2 |
+| Security-sensitive paths | Tier 2 or 3 |
+| Architectural patterns (new patterns, layer violations) | Tier 3 |
+
+#### 15.5.2 Tier 1: Team Compositions
+
+Two agent teams, two model families. The orchestrator generates two meta prompts (15.5.4, 15.5.5), then makes two handoffs.
+
+**Development Team (Codex):** CA agent as team lead writes the spec, decides team decomposition, spawns Developer agent(s), reviews output, and gives final approval. Developer agents are spawned dynamically based on the task.
+
+**Review Team (Claude Code):** Lead/Consolidator spawns three fixed reviewers (Peer, Alignment, Adversarial per Section 4), synthesizes findings into standard consolidation format (Section 11.9).
+
+**Critical asymmetry:**
+
+| Aspect | Development Team | Review Team |
+|--------|-----------------|-------------|
+| Composition | **Dynamic.** CA decides how many developers and what each owns. | **Fixed.** Always three reviewers with predefined mandates. |
+| Lead's role | Decision-maker: decomposes work, spawns agents, approves | Synthesizer: consolidates findings, surfaces disagreements |
+| Why | "How to build" benefits from task-specific judgment | "What to check" must not be filtered through the reviewing model's assumptions |
+
+#### 15.5.3 Tier 1: Workflow
+
+```
+Orchestrator Session (Claude web + playbook)
+        │
+        ├──► Development Team Prompt ──► Codex Agent Team
+        │                                   CA Agent writes spec
+        │                                   CA Agent spawns Developer(s)
+        │                                   Developer(s) implement
+        │                                   CA Agent reviews implementation
+        │                                   Output: PR / diff
+        │
+        ├──► Review Team Prompt ──────► Claude Code Agent Team
+        │    (includes PR/diff                Lead spawns 3 reviewers
+        │     from Dev Team)                  Reviewers review in parallel
+        │                                     Reviewers debate via messaging
+        │                                     Lead consolidates
+        │                                     Output: Consolidated review
+        │
+        └──► Consolidated review ──────► Codex CA Agent (cross-check)
+                                            Evaluates review findings
+                                            Accepts, pushes back, or requests fixes
+                                            Output: Final approval or fix requests
+```
+
+**Human checkpoints (Tier 1):** After prompt generation (verify scope), after consolidated review (scan for single-model blind spots), after final approval (sanity check before merge).
+
+**Handoff count:** 3, down from 6+ in manual orchestration.
+
+#### 15.5.4 Meta Prompt: Development Team
+
+A **constitution**, not a script. Defines the CA agent's authority and constraints; the CA makes tactical decisions about team composition.
+
+**Platform note:** The `## Agent Team Activation` section uses generic language. When generating prompts, the orchestrator should adapt to the target platform's vocabulary (e.g., Claude Code uses "spawn teammates," Codex may use different terminology). The directive must be unmistakable: models default to solo execution unless explicitly told to spawn separate agents.
+
+```markdown
+# Development Team: [TASK_SUMMARY]
+
+## Agent Team Activation
+
+This task REQUIRES an agent team. You are the team lead. You MUST spawn separate agents for the Developer role(s) described below. Do NOT attempt to fulfill all roles yourself in a single session. Each agent runs in its own independent context window.
+
+Workflow: You (CA) write the spec and decomposition plan first, THEN spawn Developer agent(s) as separate teammates, THEN verify their output.
+
+## Your Role: Chief Architect (Team Lead)
+
+You write the implementation spec, decompose the work, delegate to Developer agent(s), and verify the output.
+
+## Task Context
+
+[PATCH_SCOPE: what changed and why]
+[BRANCH_NAME]
+[RELEVANT_FILES: files expected to be touched]
+
+## Reference Documents
+
+[SPEC or ISSUE or BUG_REPORT]
+[ARCHITECTURE_DOC: relevant sections or constraints]
+[PRIOR_DECISIONS: any relevant context from previous releases]
+
+## Phase 1: Spec
+
+Write a brief implementation spec: what changes and why, technical approach, files affected, constraints from reference documents, test strategy.
+
+## Phase 2: Team Decomposition
+
+Before spawning Developer agents, declare your plan: how many developers, what each owns (specific files/directories), why this decomposition (or why one developer suffices).
+
+Rules:
+- Each Developer agent owns distinct files. No overlapping edits.
+- Maximum [TIER_1_MAX: 2-3] Developer agents for Tier 1 tasks.
+- If one developer suffices, use one. Don't over-decompose.
+
+## Phase 3: Developer Handoff
+
+For each Developer agent, provide: relevant spec section, exact files they own, constraints (backward compatibility, no API changes, etc.), and this instruction: "If the spec is unclear or you discover a gap, stop and message me. Do not improvise."
+
+## Phase 4: Verify and Summarize
+
+When all developers complete: verify implementation matches spec, check for integration issues between developers' work, confirm tests pass, prepare a summary for the Review Team.
+```
+
+#### 15.5.5 Meta Prompt: Review Team
+
+**Prescriptive** about team composition. The lead synthesizes but does not decide what gets reviewed.
+
+```markdown
+# Review Team: [TASK_SUMMARY]
+
+## Agent Team Activation
+
+This task REQUIRES an agent team. You are the team lead. You MUST spawn exactly three separate reviewer agents as described below. Do NOT attempt to fulfill all reviewer roles yourself in a single session. Each reviewer runs in its own independent context window with its own mandate.
+
+Workflow: You (Lead) spawn three reviewer teammates, THEN wait for all three to complete, THEN consolidate their findings.
+
+## Your Role: Review Lead (Team Lead)
+
+You coordinate the review of a patch produced by a separate development team. Your job is to synthesize findings, NOT to decide what gets reviewed.
+
+## Task Context
+
+[PATCH_SCOPE: what changed and why]
+[PR_DIFF or CODE_OUTPUT from Development Team]
+[DEV_TEAM_SUMMARY: what the CA agent says was built]
+
+## Reference Documents
+
+[SPEC: the implementation spec from the Dev Team CA]
+[ARCHITECTURE_DOC: relevant sections]
+[PRIOR_DECISIONS: relevant context]
+
+## Team Structure (Fixed — Do Not Modify)
+
+Spawn exactly three reviewers:
+
+**Reviewer 1: Peer Reviewer** — Completeness, quality, clarity. Core question: "Is anything missing, overcomplicated, or unmaintainable?"
+
+**Reviewer 2: Alignment Reviewer** — Architecture compliance, constraints, backward compatibility. Core question: "Does this match approved documents? Does it break existing behavior?"
+
+**Reviewer 3: Adversarial Reviewer** — Failure modes, edge cases, regressions, security. Core question: "How does this break? What assumptions are wrong?"
+
+## Review Rules
+
+- Each reviewer works independently in their own context.
+- Reviewers challenge each other's findings via messaging. Disagreement is signal.
+- The architect has blind spots. Your job is to find problems. If you find none, look harder.
+- Anchor reviews to reference documents, not the dev team's framing.
+
+## Consolidation
+
+After all three reviewers report, synthesize into: Verdict Table, Blocking Issues, Agreement Analysis (with explicit disagreement preservation), and Required Actions. Use the consolidation format from the playbook's Section 11.9.
+
+Critical rules:
+- Do NOT drop single-reviewer findings. They're often the most valuable.
+- Do NOT smooth over disagreements. Report both views.
+- DO flag if findings suggest Tier 2 escalation.
+```
+
+#### 15.5.6 Tier 2 and Tier 3 Adjustments
+
+**Tier 2 (Guided Multi-Model):** Same structure as Tier 1 with: dev team cap raised to 5 developers, orchestrator actively reviews spec before dev starts and findings before CA cross-check, consider adding one Gemini reviewer for cross-model diversity, CA cross-check becomes a thorough evaluation with explicit response document, may combine with Section 15.4 for multi-track work.
+
+**Tier 3 (Full Orchestration):** Revert to standard playbook (Phases A-D). Agent teams may assist within individual phases, but the orchestrator manually manages phase transitions with full model diversity per Section 3.
+
+#### 15.5.7 When NOT to Use Agent Team Workflow
+
+| Situation | Why | Use Instead |
+|-----------|-----|-------------|
+| First release on a new codebase | No established patterns for CA to decompose against | Tier 3 |
+| Scope unclear or still evolving | Agent teams need a defined task; ambiguity causes drift | Pre-Phase A first |
+| Security-critical changes | Single-model review board is insufficient | Tier 2 minimum, Tier 3 preferred |
+| Post-mortem/incident response | Needs human judgment at every step | Tier 3 with abbreviated phases (Hotfix, 15.3) |
+| Agent team tooling is unstable | Experimental features may behave unpredictably | Manual orchestration |
+
+#### 15.5.8 Monitoring Agent Teams
+
+Same failure modes as manual orchestration (Section 7.9), plus agent-team-specific issues:
+
+| Failure Mode | Signal | Intervention |
+|--------------|--------|--------------|
+| Solo execution (no team spawned) | Model fulfills all roles in a single session, no teammates visible, context compaction from overloaded window | Re-prompt with stronger activation directive. Lead with "Create an agent team" as the literal first instruction. Verify the platform supports agent teams. |
+| Developer agent improvising | Dev messages CA about a spec gap but CA approves without updating spec | Pause, apply spec gap protocol (Section 7.9.2) |
+| Review lead smoothing disagreements | Consolidated output has no disagreement section, or disagreements are framed as "minor differences in emphasis" | Re-prompt lead with consolidation rules, or manually extract reviewer outputs |
+| Single-model blind spot | All three reviewers approve an area that feels risky | This is the known limitation. The CA cross-check (different model) is the safety net. If you're uncomfortable, escalate to Tier 2. |
+| Teammate drift | A reviewer starts doing a different role's job (adversarial reviewer checking documentation quality) | Check spawn prompts. If mandates were clear, re-spawn the drifting reviewer. |
+| Token budget exceeded | Agent team stalls or produces truncated output | Reduce context per reviewer. Use Section 7.8.6 priority order for trimming reference docs. |
+
 ---
 
 ## 16. Output Standards
@@ -1878,11 +2088,25 @@ These are post-hoc diagnoses — patterns you notice after a phase or release. F
 - [ ] Context budget checked (30-60% of effective window)
 - [ ] Deliver as separate files per 7.6
 
+#### Agent Team Workflow (Section 15.5, Tier 1)
+- [ ] Assess risk characteristics → confirm Tier 1 is appropriate
+- [ ] Check escalation triggers → escalate if needed
+- [ ] Generate Development Team meta prompt (15.5.4)
+- [ ] Generate Review Team meta prompt (15.5.5)
+- [ ] Hand Development Team prompt to Codex agent team
+- [ ] Checkpoint: scan dev output before handing to review team
+- [ ] Hand Review Team prompt (with PR/diff) to Claude Code agent team
+- [ ] Checkpoint: scan consolidated review for single-model blind spot risks
+- [ ] Hand consolidated review to Codex CA agent for cross-check
+- [ ] Checkpoint: review final approval before merge
+
 ### 19.2 Quick Reference Cards
 
 For prompt energy language substitutions, see Section 7.4.
 For severity levels, see Section 16.3.
 For the Round 2 decision matrix, see Section 2.2.1.
+For agent team tier selection, see Section 15.5.1.
+For agent team meta prompt templates, see Sections 15.5.4 and 15.5.5.
 
 ---
 
@@ -1909,7 +2133,8 @@ These are the "approved documents" referenced throughout this playbook.
 | 3.0 | 2026-02-01 | Three-tier architecture. Project-agnostic rewrite. Added: Pre-Phase A workflows, spec deviation protocol, track-based implementation, process evaluation, one-revision cap decision matrix, verification protocols. Absorbed critique guide into Section 7. Removed: inline templates, automation architecture, signature blocks. |
 | 3.1 | 2026-02-06 | Added: Context Window Management (7.8), Mid-Phase Intervention (7.9). Expanded: Phase A and Phase C with process guidance and common failures. Added: Proposal Review iteration limits (13.4), parallel track criteria (15.4). Merged Section 16 into 6.3. Renumbered 17-20 → 16-19. |
 | 3.2 | 2026-02-06 | Compaction pass. Consolidated 7.9 intervention tables, eliminated Quick Reference duplicates, tightened prose throughout. Strengthened 7.6 file-per-prompt as hard rule with operational rationale. Rewrote 7.7 to ask orchestrator for delivery preference (full suite vs. step by step) instead of defaulting to full suite. Net: 2,044 → ~1,920 lines. |
+| 3.3 | 2026-02-09 | Added: Agent Team Workflow (15.5) with three-tier orchestration system. Defines Development Team (Codex, dynamic composition) and Review Team (Claude Code, fixed composition) meta prompts with explicit agent team activation directives. Tier system based on risk characteristics with escalation triggers. Net: ~1,920 → ~2,140 lines. |
 
 ---
 
-*End of LLM Development Playbook v3.2*
+*End of LLM Development Playbook v3.3*
