@@ -1,7 +1,7 @@
 # LLM Development Playbook: Multi-Agent Review Workflow
 
-**Version:** 3.3
-**Updated:** 2026-02-09
+**Version:** 3.3.1
+**Updated:** 2026-02-23
 **Based on:** Battle-tested patterns across 8+ release cycles
 
 ---
@@ -1744,7 +1744,12 @@ You write the implementation spec, decompose the work, delegate to Developer age
 
 [PATCH_SCOPE: what changed and why]
 [BRANCH_NAME]
+[BASE_BRANCH]
 [RELEVANT_FILES: files expected to be touched]
+[TEST_COMMAND]
+[SMOKE_TEST_COMMANDS]
+[COMMIT_FORMAT: e.g., "fix(export): description"]
+[PR_TITLE_FORMAT: e.g., "fix: description (#PR)"]
 
 ## Reference Documents
 
@@ -1767,11 +1772,21 @@ Rules:
 
 ## Phase 3: Developer Handoff
 
-For each Developer agent, provide: relevant spec section, exact files they own, constraints (backward compatibility, no API changes, etc.), and this instruction: "If the spec is unclear or you discover a gap, stop and message me. Do not improvise."
+For each Developer agent, provide: relevant spec section, exact files they own, constraints (backward compatibility, no API changes, etc.), and these instructions:
+- "If the spec is unclear or you discover a gap, stop and message me. Do not improvise."
+- Create branch `[BRANCH_NAME]` from `[BASE_BRANCH]` (if not already created).
+- Commit after each logical unit of work. Message format: `[COMMIT_FORMAT]`.
+- Run `[TEST_COMMAND]` after each commit.
 
 ## Phase 4: Verify and Summarize
 
-When all developers complete: verify implementation matches spec, check for integration issues between developers' work, confirm tests pass, prepare a summary for the Review Team.
+When all developers complete:
+- Verify implementation matches spec
+- Check for integration issues between developers' work
+- Run full test suite: `[TEST_COMMAND]`
+- Run smoke tests: `[SMOKE_TEST_COMMANDS]`
+- Create PR to `[BASE_BRANCH]` with title format `[PR_TITLE_FORMAT]` and description covering: what changed, why, how to test
+- Prepare a summary of what was built for the Review Team
 ```
 
 #### 15.5.5 Meta Prompt: Review Team
@@ -2133,8 +2148,9 @@ These are the "approved documents" referenced throughout this playbook.
 | 3.0 | 2026-02-01 | Three-tier architecture. Project-agnostic rewrite. Added: Pre-Phase A workflows, spec deviation protocol, track-based implementation, process evaluation, one-revision cap decision matrix, verification protocols. Absorbed critique guide into Section 7. Removed: inline templates, automation architecture, signature blocks. |
 | 3.1 | 2026-02-06 | Added: Context Window Management (7.8), Mid-Phase Intervention (7.9). Expanded: Phase A and Phase C with process guidance and common failures. Added: Proposal Review iteration limits (13.4), parallel track criteria (15.4). Merged Section 16 into 6.3. Renumbered 17-20 → 16-19. |
 | 3.2 | 2026-02-06 | Compaction pass. Consolidated 7.9 intervention tables, eliminated Quick Reference duplicates, tightened prose throughout. Strengthened 7.6 file-per-prompt as hard rule with operational rationale. Rewrote 7.7 to ask orchestrator for delivery preference (full suite vs. step by step) instead of defaulting to full suite. Net: 2,044 → ~1,920 lines. |
-| 3.3 | 2026-02-09 | Added: Agent Team Workflow (15.5) with three-tier orchestration system. Defines Development Team (Codex, dynamic composition) and Review Team (Claude Code, fixed composition) meta prompts with explicit agent team activation directives. Tier system based on risk characteristics with escalation triggers. Net: ~1,920 → ~2,140 lines. |
+| 3.3 | 2026-02-09 | Added: Agent Team Workflow (15.5) with three-tier orchestration system. Defines Development Team (Codex, dynamic composition) and Review Team (Claude Code, fixed composition) meta prompts with explicit agent team activation directives. Tier system based on risk characteristics with escalation triggers. |
+| 3.3.1 | 2026-02-23 | Fixed: Development Team meta prompt (15.5.4) now includes branch creation, commit strategy, test commands, and PR creation requirements. Added missing Task Context variables. |
 
 ---
 
-*End of LLM Development Playbook v3.3*
+*End of LLM Development Playbook v3.3.1*
