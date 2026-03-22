@@ -1,7 +1,7 @@
 # LLM Development Playbook: Multi-Agent Review Workflow
 
-**Version:** 3.3.1
-**Updated:** 2026-02-23
+**Version:** 3.4.0
+**Updated:** 2026-03-22
 **Based on:** Battle-tested patterns across 8+ release cycles
 
 ---
@@ -77,10 +77,10 @@ PHASE A: Spec Development          PHASE B: Spec Review
                     ┌───────────────────────┘
                     ▼
 PHASE C: Implementation             PHASE D: Code Review
-  C.1: CA writes impl prompt         D.1: CA PR Review
-  C.2: Developer implements          D.2: Review Board (3 models, parallel)
-  C.3: PR created ──────────────▶    D.3: Consolidation
-                                     D.4: Developer fixes (if needed)
+  C.0: CA investigation (if needed)  D.1: CA PR Review
+  C.1: CA writes impl prompt         D.2: Review Board (3 models, parallel)
+  C.2: Developer implements          D.3: Consolidation
+  C.3: PR created ──────────────▶    D.4: Developer fixes (if needed)
                                      D.5: Adversarial verification
                                      D.6: CA approval → MERGE
 ```
@@ -174,6 +174,7 @@ Markdown files are working artifacts during development. PR comments are the pub
 | Review outputs | PR comments (primary), `.md` backups | Official record |
 | Decisions | PR comments | Audit trail |
 | Specs | Project internal directory | Reference, version-controlled |
+| Session logs | Project internal directory | Chronological record for validation runs, environment debugging, complex multi-attempt tasks. Records every decision, dead end, and learning. |
 
 ### 2.7 Fresh Prompt Generation
 
@@ -185,9 +186,7 @@ Every prompt is generated fresh for the current step. Never reference prompts fr
 | "Same as last time but change the PR number" | Full prompt with correct PR number embedded |
 | "Refer to the implementation prompt above" | Complete, self-contained prompt |
 
-**Why:** Context windows compact or reset between sessions. PR numbers, branch names, and file states change. Each model instance starts fresh; give it everything it needs.
-
-**Self-containment test:** If you can't copy-paste a prompt into a fresh model session and have it work, the prompt is incomplete.
+**Self-containment test:** If you can't copy-paste a prompt into a fresh model session and have it work, the prompt is incomplete. Context windows reset between sessions; give each model everything it needs.
 
 ---
 
@@ -213,7 +212,7 @@ These are defaults. Override based on your project's needs and model availabilit
 | UX-heavy phase | Gemini as Peer + Alignment |
 | Complex architecture | Claude for all review roles (accept reduced diversity) |
 | Research-heavy spec | Gemini as Chief Architect |
-| Context-heavy phase (large diff, many reference docs) | Largest-window model for highest-context role (usually Adversarial or Consolidation). See Section 7.8.7. |
+| Context-heavy phase (large diff, many reference docs) | Largest-window model for highest-context role (usually Adversarial or Consolidation). See Section 7.8.6. |
 
 ### 3.3 Minimum Diversity Requirements
 
@@ -347,20 +346,9 @@ Before entering Phase A, determine whether pre-work is needed:
 
 ### 6.1 Project Variables
 
-Define once per project, update rarely. These values are referenced throughout all prompts.
+Define once per project, update rarely. These values are referenced throughout all prompts: `PROJECT_NAME`, `REPO_URL`, `INTERNAL_DOCS_DIR`, `TEST_COMMAND`, `SMOKE_TEST_COMMANDS`, `ARCHITECTURE_CONSTRAINTS`, `REFERENCE_DOCS`, `BRANCH_CONVENTION`, `MODEL_ASSIGNMENTS`, `DEVELOPER_TOOL`.
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `PROJECT_NAME` | Project identifier | — |
-| `REPO_URL` | Repository location | `https://github.com/org/repo` |
-| `INTERNAL_DOCS_DIR` | Where specs and review outputs are stored | `.project-internal/` |
-| `TEST_COMMAND` | How to run the test suite | `pytest tests/ -v` |
-| `SMOKE_TEST_COMMANDS` | Quick verification commands | Project-specific CLI checks |
-| `ARCHITECTURE_CONSTRAINTS` | Layer rules, import restrictions, etc. | "Core must not import from UI" |
-| `REFERENCE_DOCS` | Paths to roadmap, architecture, strategy docs | Project-specific |
-| `BRANCH_CONVENTION` | Branch naming pattern | `feature/v{version}-{description}` |
-| `MODEL_ASSIGNMENTS` | Which model plays which role | See Section 3.1 |
-| `DEVELOPER_TOOL` | CLI tool the developer agent uses | Codex CLI, Claude Code, Cursor, etc. |
+See `session-variables.md` for the complete template with descriptions, release variables, and filled examples.
 
 ### 6.2 Release Decisions
 
@@ -384,14 +372,35 @@ Decide per release cycle before entering the workflow:
 | Spec version (current approved) | Reviewers need to know what they're checking against | `v1.1` |
 | Base branch | Usually `main` but not always | `main` |
 | Files in scope | Focuses reviewers, especially for track-based work | List of changed files |
+| Test count (before) | Flat or declining count on a feature PR is a signal | `897 tests passing` |
 
 A single wrong PR number propagates across 8+ prompt files. 30 seconds of confirmation prevents 30 minutes of corrections.
+
+**Agent team workflow adjustments:** In Tier 1/2 workflows, the PR number doesn't exist at prompt generation time — the dev team creates it. Use `[PR_NUMBER]` placeholder in review team prompts, filled after dev team completion. Branch names are set by the orchestrator in the dev team meta-prompt, not by the dev team.
 
 **If references change after prompt generation:**
 1. Identify all affected files in the suite
 2. Update systematically (search-and-replace)
 3. Re-deliver corrected files
 4. Confirm corrections with orchestrator
+
+### 6.4 Multi-PR Sequence Management
+
+When a proposal or release spawns multiple PRs (e.g., staged rollout, multi-track work across versions), maintain a **sequence ledger** — a living document updated after each PR merge.
+
+**When to use:** Any proposal generating 2+ PRs/releases, or any multi-stage implementation where later stages depend on earlier ones.
+
+**The ledger contains one table:**
+
+| Item | Proposal Says | Codebase Reality (post-PR N) | PR That Changed It | Impact on Downstream |
+|------|--------------|------------------------------|-------------------|---------------------|
+| Cache key scheme | `provider:model:hash` | `provider:model:content_hash:config_hash` | PR #2 | PR #4 prompt must use actual scheme |
+| Classification enum | 3 values | 5 values (added `image_blank`, `parse_error`) | PR #3 | PR #5 review must check all 5 |
+
+**Rules:**
+1. The orchestrator updates the ledger after each merge, capturing: what changed vs. the proposal, what the next PR needs to know, and any blocking decisions still pending.
+2. The ledger is front-loaded into every subsequent PR's CA prompt and review prompt. It IS the living approved document — not the original proposal.
+3. Stage 2+ in a sequence must run a C.0 readiness check (§10.3) against the post-merge codebase before skipping Phase A/B. The proposal can serve as the spec for multiple stages, but only if validated against accumulated drift.
 
 ---
 
@@ -416,137 +425,53 @@ Most review prompts fail in one of two predictable ways:
 
 These patterns undermine review quality. Avoid them in every prompt.
 
-**Leading questions** presume an answer and ask for confirmation:
-
-| Leading (avoid) | Open (use) |
-|-----------------|------------|
-| "Will the entry points work as specified?" | "What could go wrong with the entry point configuration?" |
-| "Is the migration strategy comprehensive?" | "What scenarios might the migration strategy miss?" |
-| "Are there any issues with the approach?" | "What are the weakest parts of this approach?" |
-
-**Author-selected focus** steers reviewers away from blind spots:
-
-| Author-Selected (avoid) | Document-Driven (use) |
-|--------------------------|----------------------|
-| "Please review these 7 areas I've identified" | "Verify alignment with the Architecture doc and Roadmap" |
-| "Focus on technical correctness and migration risk" | "Review against approved reference documents; flag any deviations" |
-| "Key sections: 1, 2, 3, 5, 7" | "Review the complete spec; note which sections you found strongest and weakest" |
-
-**Implicit approval expectation** frames review as validation:
-
-| Approval-Oriented (avoid) | Critique-Oriented (use) |
-|---------------------------|------------------------|
-| "Please review and provide feedback" | "Your job is to find problems. If you find none, look harder." |
-| "Let me know if you have any concerns" | "What are your top 3 concerns, even if you can't fully articulate them?" |
-| "Please confirm the approach is sound" | "Where would you do something differently? Why?" |
-
-**Comfort-seeking language** makes criticism feel optional:
-
-| Comfort-Seeking (avoid) | Critique-Inviting (use) |
-|--------------------------|------------------------|
-| "Feel free to raise any concerns" | "What concerns you most about this?" |
-| "If you notice anything" | "What did you notice that seems off?" |
-| "Any suggestions would be helpful" | "What would you change and why?" |
-| "I'd appreciate your thoughts" | "Where am I wrong?" |
+| Anti-Pattern | Avoid | Use Instead |
+|--------------|-------|-------------|
+| **Leading questions** — presume an answer | "Are there any issues with the approach?" | "What are the weakest parts of this approach?" |
+| **Leading questions** | "Is the migration strategy comprehensive?" | "What scenarios might the migration strategy miss?" |
+| **Author-selected focus** — steers away from blind spots | "Please review these 7 areas I've identified" | "Verify alignment with the Architecture doc and Roadmap" |
+| **Author-selected focus** | "Focus on technical correctness" | "Review against approved reference documents; flag any deviations" |
+| **Implicit approval** — frames review as validation | "Please review and provide feedback" | "Your job is to find problems. If you find none, look harder." |
+| **Implicit approval** | "Please confirm the approach is sound" | "Where would you do something differently? Why?" |
+| **Comfort-seeking** — makes criticism optional | "Feel free to raise any concerns" | "What concerns you most about this?" |
+| **Comfort-seeking** | "Any suggestions would be helpful" | "What would you change and why?" |
 
 ### 7.3 Patterns That Work
 
-These patterns consistently produce better review quality.
+Every review prompt should include these patterns. The pattern names are the scaffolding; agents generate the specific prompt language from the principle.
 
-**Explicit permission to disagree.** State directly that disagreement is expected:
-
-> **Your job is not to approve.** You are here to find problems.
->
-> **The architect has blind spots.** They wrote this spec. They can't see their own assumptions. You can.
->
-> **Be constructive, but don't be gentle.** The goal is to catch problems before implementation, not to validate the architect's work.
-
-**Structured critique frameworks.** Give reviewers specific tables to fill, not open-ended requests:
-
-> **What assumptions does this spec make that might be wrong?**
->
-> | Assumption | Why It Might Be Wrong | Impact If Wrong |
-> |------------|----------------------|-----------------|
->
-> **What failure modes aren't addressed?**
->
-> | Failure | How It Happens | Would We Notice? |
-> |---------|----------------|------------------|
-
-**Uncomfortable questions.** Explicitly invite the hard questions:
-
-> Questions that challenge the architect's decisions:
-> 1. [Question that pokes at a core assumption]
-> 2. [Question that suggests an alternative approach]
-> 3. [Question that exposes a gap in reasoning]
->
-> **If something seems odd but you can't articulate why, flag it anyway.**
-
-**Blind spot identification.** Ask for what the author missed, not what they got right:
-
-> The spec author spent hours on this. They're probably right about the hard parts (they thought carefully about those). They're probably wrong about the "obvious" parts (they didn't think about those).
->
-> **Where is the spec overconfident?**
-> **What seems too simple?**
-> **What's conspicuously absent?**
-
-**Alternative approaches.** Force consideration of different paths:
-
-> | Spec's Approach | Alternative Approach | Why Alternative Might Be Better |
-> |-----------------|---------------------|--------------------------------|
->
-> **You don't have to be right.** The point is to surface options the architect may not have considered.
-
-**Severity stratification.** Force prioritization so real issues don't get buried:
-
-> **Critical (Blocks Implementation):**
-> [Only issues that would cause implementation to fail]
->
-> **Major (Should Fix):**
-> [Issues that would cause problems but aren't blocking]
->
-> **Minor (Consider):**
-> [Nice-to-haves and polish]
->
-> **Do not list more than 3 Critical issues.** If you have more, you're miscalibrating severity.
+| Pattern | Mechanism | Key Prompt Phrases |
+|---------|-----------|-------------------|
+| **Permission to disagree** | State directly that disagreement is expected | "Your job is not to approve. You are here to find problems." / "The architect has blind spots." |
+| **Structured critique frameworks** | Give reviewers tables to fill, not open-ended asks | Assumption / Why Wrong / Impact table; Failure / How / Would We Notice? table |
+| **Uncomfortable questions** | Explicitly invite hard questions that challenge core decisions | "If something seems odd but you can't articulate why, flag it anyway." |
+| **Blind spot identification** | Ask for what the author missed, not what they got right | "Where is the spec overconfident? What seems too simple? What's conspicuously absent?" |
+| **Alternative approaches** | Force consideration of different paths | Spec's Approach / Alternative / Why Better table. "You don't have to be right." |
+| **Severity stratification** | Force prioritization so real issues don't get buried | Critical (blocks) / Major (should fix) / Minor (consider). "Max 3 Critical." |
 
 ### 7.4 Language Calibration
-
-Quick reference for converting weak language to strong language in any prompt:
 
 | Weak | Strong |
 |------|--------|
 | "Please review" | "Find the problems in" |
 | "Any feedback" | "What are the top 3 issues" |
-| "If you have concerns" | "What concerns you most" |
 | "Feel free to" | "You must" |
-| "It would be helpful" | "I need you to" |
 | "Does this work" | "How does this break" |
 | "Is this complete" | "What's missing" |
 | "Looks good?" | "What's the weakest part" |
 | "Confirm the approach" | "Challenge the approach" |
-| "Any suggestions" | "What would you do differently" |
-| "I think this is correct" | "Where is this wrong" |
 | "Please validate" | "Please critique" |
 
 ### 7.5 Pre-Generation Checklist
 
 Before sending any review prompt, verify:
 
-- [ ] **No leading questions.** Questions don't presume answers.
-- [ ] **No author-selected focus.** Review scope driven by reference docs, not author preference.
-- [ ] **No approval expectation.** Prompt explicitly invites critique.
+- [ ] **Anti-patterns avoided.** No leading questions, author-selected focus, or approval-seeking language (Section 7.2).
+- [ ] **Critique patterns included.** Permission to disagree, structured frameworks, blind spot prompt, severity stratification (Section 7.3).
 - [ ] **Role differentiation.** This reviewer has a distinct focus from the others.
-- [ ] **Permission to disagree.** Explicit statement that criticism is expected.
-- [ ] **Blind spot prompt.** Asks "what am I not seeing?"
-- [ ] **Alternative prompt.** Asks "what would you do differently?"
-- [ ] **Uncomfortable questions.** Invites challenging queries.
 - [ ] **Reference documents cited.** Reviewers can verify alignment independently.
-- [ ] **Structured critique frameworks.** Tables and frameworks, not open-ended asks.
-- [ ] **Severity stratification.** Forces prioritization of issues.
-- [ ] **Specific, not vague.** Actionable language throughout.
 - [ ] **References confirmed.** Branch name, PR number, spec version are correct (Section 6.3).
-- [ ] **Context budget checked.** Assembled prompt fits within 30-60% of effective window. If over, trimmed using priority order (Section 7.8.6). High-risk content positioned early.
+- [ ] **Context budget checked.** Assembled prompt fits within 30-60% of effective window (Section 7.8).
 
 ### 7.6 Prompt Delivery Standards
 
@@ -557,7 +482,7 @@ Before sending any review prompt, verify:
 2. Name files using convention: `[Version]_[Phase]_[Step]_[Role].md`
 3. Present all files for easy access.
 
-**Why this matters operationally:** The orchestrator is copying prompts to 3-4 different model CLIs. Separate files make this mechanical: open file, copy, paste, done. Prompts embedded in chat or grouped into a single document create extraction overhead and increase the chance of copying the wrong content to the wrong model.
+**Why:** The orchestrator copies each file to a different model CLI. Separate files make this mechanical and prevent copying the wrong content to the wrong model.
 
 **Examples:**
 - `v2.1_PhaseB_B1_Peer_Review.md`
@@ -577,12 +502,8 @@ At each phase transition, **ask the orchestrator** how they want prompts deliver
 
 | Option | When Best | What's Delivered |
 |--------|-----------|-----------------|
-| **Full phase suite** | Straightforward project, approach is settled, ready to execute | All prompts for the phase, generated together with shared variables |
-| **Step by step** | Complex project, orchestrator wants to tailor each prompt, or earlier steps may change what later steps need | One prompt at a time, orchestrator requests the next when ready |
-
-**The CA should ask, not assume.** Different phases of the same project may warrant different approaches. Phase B on a simple patch might be full suite. Phase D on a complex feature with a large diff might be step by step so the orchestrator can adjust context and focus per reviewer.
-
-**What "full phase suite" means:** All prompts within a phase that share the same variables (branch name, PR number, spec version). This is NOT "generate every prompt for the entire workflow." It's the prompts for the current phase only.
+| **Full phase suite** | Straightforward project, approach is settled | All prompts for the phase, generated together with shared variables |
+| **Step by step** | Complex project, or earlier steps may change what later steps need | One prompt at a time, orchestrator requests the next when ready |
 
 **Full suite contents by phase:**
 
@@ -592,189 +513,116 @@ At each phase transition, **ask the orchestrator** how they want prompts deliver
 | C (Implementation) | C.1 Implementation Prompt |
 | D (Code Review) | D.1 CA PR Review, D.2 Peer, D.2 Alignment, D.2 Adversarial, D.3 Consolidation, D.4 Fix Summary template, D.5 Verification, D.6 Final Approval |
 
-**Suite generation rules:**
-1. All prompts reference the same branch name and PR number.
-2. All prompts reference the same spec version.
-3. Generate in workflow order.
-4. Deliver as separate files (per 7.6).
-5. If using tracks, generate one suite per track.
-6. If any prompt in the suite exceeds context budget, flag it to the orchestrator with a recommended trim strategy before delivery.
+**Suite generation rules:** All prompts reference the same branch/PR/spec version. Generate in workflow order. Deliver as separate files (per 7.6). If using tracks, one suite per track. If any prompt exceeds context budget, flag to orchestrator before delivery.
+
+**Note:** Section 7.7 applies to manual orchestration (Tier 3). Agent team workflows (Tier 1/2) use a single meta-prompt per team — internal decomposition is the team lead's responsibility.
 
 ### 7.8 Context Window Management
 
-Every prompt competes for space in a finite context window. More context gives reviewers better grounding, but past a threshold, attention degrades — models skim instead of reading and produce shallower analysis. The goal is to maximize *useful* context, not total context.
+Every prompt competes for space in a finite context window. Past a threshold, attention degrades — models skim instead of reading. The goal is to maximize *useful* context, not total context.
 
-#### 7.8.1 The Attention Curve Problem
+#### 7.8.1 The Attention Curve
 
-| Context Load | Model Behavior | Review Quality |
-|--------------|----------------|----------------|
-| **Under 30%** of effective window | Full attention to all content | High, but may lack grounding if too little context |
-| **30-60%** of effective window | Strong attention, good synthesis | **Sweet spot** — enough grounding, full engagement |
-| **60-80%** of effective window | Begins prioritizing start and end, skimming middle | Adequate, but middle sections get less scrutiny |
-| **80%+** of effective window | Significant attention loss, generic responses | Degrades noticeably — detail drops, frameworks get partially filled |
+| Context Load | Review Quality |
+|--------------|----------------|
+| **Under 30%** of effective window | High, but may lack grounding |
+| **30-60%** of effective window | **Sweet spot** — enough grounding, full engagement |
+| **60-80%** of effective window | Middle sections get less scrutiny |
+| **80%+** of effective window | Degrades noticeably — frameworks get partially filled |
 
-**Effective window is not the advertised window.** A model with a 200K token context window doesn't perform equally well at 190K as it does at 40K. Treat the effective window as roughly 40-60% of the advertised maximum for review-quality work.
+**Effective window ≈ 40-60% of advertised maximum** for review-quality work.
 
 #### 7.8.2 Context Budget by Phase
 
-**Phase B: Spec Review**
-
-| Content | Include? | Size Guidance |
-|---------|----------|---------------|
-| Review prompt (role, frameworks, instructions) | Always — full | ~1,500-2,500 tokens |
-| Spec under review | Always — full | Varies (the whole point) |
-| Architecture doc | Full if short (<3K tokens). Summary + relevant sections if long. | Extract constraints and layer rules only |
-| Roadmap | Relevant section only (the section this spec implements) | Don't include the full multi-version roadmap |
-| Strategy doc | Only if the spec involves strategic decisions | Usually a few paragraphs of relevant decisions |
-| Prior specs (same release) | Don't include unless the spec explicitly references them | Cross-reference by name, don't embed |
-
-**Phase C: Implementation Prompt**
-
-| Content | Include? | Size Guidance |
-|---------|----------|---------------|
-| Implementation prompt (instructions, checklist) | Always — full | ~2,000-4,000 tokens |
-| Approved spec v1.1 | Always — full | The developer needs every detail |
-| Architecture constraints | Relevant constraints only (the ones this spec touches) | A focused list, not the full architecture doc |
-| Existing code context | Only files being modified, and only the relevant sections | Don't dump entire files if only one function changes |
-
-**Phase D: Code Review** — Context pressure is highest here. Diffs can be thousands of lines.
-
-| Content | Include? | Size Guidance |
-|---------|----------|---------------|
-| Review prompt (role, frameworks, instructions) | Always — full | ~1,500-2,500 tokens |
-| Diff / changed files | Always — but see diff management below | Varies significantly |
-| Spec v1.1 | Relevant sections only (the sections this code implements) | Summarize overview, include technical design in full |
-| Architecture constraints | Relevant constraints only | Focused list |
-| Previous review outputs | Never for B.1/D.2 reviewers (prevents anchoring). Only for consolidation and verification. | Consolidation needs all three reviews |
+| Content | Phase B (Spec) | Phase C (Impl) | Phase D (Code) |
+|---------|---------------|----------------|----------------|
+| Prompt (role, frameworks) | Always — full (~1.5-2.5K tokens) | Always — full (~2-4K tokens) | Always — full (~1.5-2.5K tokens) |
+| Artifact under review | Spec — full | Spec v1.1 — full | Diff — full (see diff mgmt below) |
+| Architecture doc | Full if <3K tokens, else extract constraints | Relevant constraints only | Relevant constraints only |
+| Roadmap | Relevant section only | — | — |
+| Strategy doc | Only if strategic decisions involved | — | — |
+| Prior specs/reviews | Cross-reference, don't embed | Don't include Phase B outputs | Never for D.2 reviewers (prevents anchoring). Only for consolidation/verification. |
+| Existing code | — | Only modified files, relevant sections | — |
 
 #### 7.8.3 Diff Management for Code Review
 
-Large diffs are the most common context window problem. Strategies in order of preference:
-
-**1. Track splitting (preventive).** Split into tracks during Phase C (Section 15.4). Prevents the problem entirely.
-
-**2. File grouping.** When the diff is too large for one prompt:
-
-| Approach | When to Use | How |
-|----------|-------------|-----|
-| **Logical grouping** | Files cluster by subsystem | Group related files. "Review these 5 files that implement the export feature." |
-| **Priority ordering** | Some files are higher risk than others | Put highest-risk files first in the prompt. Models attend best to early content. |
-| **Staged review** | Diff exceeds effective window even with grouping | Split into 2-3 review passes with clear scope per pass. Consolidate findings across passes. |
-
-**3. Context trimming.** When including full files, trim aggressively:
-
-| Include | Exclude |
-|---------|---------|
-| Changed functions/methods — full | Unchanged imports (unless import changes are in scope) |
-| Surrounding context (5-10 lines above/below changes) | Unchanged functions in the same file |
-| New files — full | Test files that are simple and mechanical (e.g., `assert result == expected`) |
-| Test files with non-obvious logic | Boilerplate, comments, docstrings in unchanged code |
+Strategies in order of preference: (1) **Track splitting** during Phase C (Section 15.4) prevents the problem entirely. (2) **File grouping** by subsystem or risk level — highest-risk files first, models attend best to early content. If diff exceeds window even with grouping, split into 2-3 review passes. (3) **Context trimming** — include changed functions full with 5-10 lines surrounding context; exclude unchanged functions, mechanical tests, boilerplate.
 
 #### 7.8.4 Reference Document Strategies
 
-| Strategy | When to Use | Example |
-|----------|-------------|---------|
-| **Full document** | Document is short (<3K tokens) and most of it is relevant | A focused architecture constraints file |
-| **Relevant section** | Document is long but one section is directly relevant | "Roadmap Section 6: CLI Completion" |
-| **Extracted constraints** | You need specific rules from a larger document | "Architecture constraints relevant to this spec: (1) core/ must not import from io/, (2) all CLI commands return exit codes 0-3, (3) ..." |
-| **Summary + pointer** | Document provides background context but isn't being verified line-by-line | "The Strategy doc (linked) established that backward compatibility is non-negotiable for v2.x. Key decisions: ..." |
-| **Omit with citation** | Document exists for the record but isn't needed for this review | "Approved per Strategy v1.2 (not included — see [path] if needed)" |
+| Strategy | When to Use |
+|----------|-------------|
+| **Full document** | Short (<3K tokens) and mostly relevant |
+| **Relevant section** | Long doc, one section directly relevant |
+| **Extracted constraints** | Need specific rules from a larger document |
+| **Summary + pointer** | Background context, not being verified line-by-line |
+| **Omit with citation** | Exists for the record but not needed for this review |
 
-#### 7.8.5 What to Never Cut
+#### 7.8.5 Context Trimming Priority
 
-- **The review prompt itself** (role, frameworks, critique instructions). Cutting these undermines quality more than any context can compensate for.
-- **The artifact under review** (spec, diff, code). If it doesn't fit, split the review — don't summarize what's being reviewed.
-- **Severity stratification framework.** Without it, reviewers produce undifferentiated issue lists.
-- **The "your job is to find problems" framing.** Removing this to save tokens is a false economy.
+When assembled prompt exceeds the 30-60% sweet spot, trim in this order:
 
-#### 7.8.6 What to Cut First
+| Priority | Action |
+|----------|--------|
+| 1 (cut first) | Strategy/background documents not being directly verified |
+| 2 | Full reference docs → extracted relevant sections |
+| 3 | Unchanged code context around diffs |
+| 4 | Prior phase outputs (loses history but prevents anchoring) |
+| 5 | Non-primary reference docs (keep architecture, cut strategy) |
+| 6 (cut last) | Sections of the artifact under review — split the review instead |
+| **Never cut** | The review prompt itself, severity framework, "your job is to find problems" framing |
 
-| Priority | Cut | Impact |
-|----------|-----|--------|
-| 1 (cut first) | Strategy/background documents not being directly verified | Low — these provide color, not substance |
-| 2 | Full reference docs → extracted relevant sections | Low — reviewers rarely read the whole doc anyway |
-| 3 | Unchanged code context around diffs | Low-Medium — reduces grounding but keeps focus on changes |
-| 4 | Prior phase outputs (previous reviews, earlier spec versions) | Medium — loses historical context but prevents anchoring bias |
-| 5 | Non-primary reference docs (keep architecture, cut strategy) | Medium — reduces alignment checking surface |
-| 6 (cut last) | Sections of the artifact under review | High — avoid this; split the review instead |
+#### 7.8.6 Model-Specific Considerations
 
-#### 7.8.7 Model-Specific Considerations
+When context pressure is high, window capacity becomes a factor in model selection (interacts with Section 3). Assign larger-window models to high-context roles (Alignment checking multiple docs, Consolidation synthesizing three reviews). Assign smaller-window models to focused roles (Adversarial attacking specific vectors).
 
-| Consideration | Guidance |
-|---------------|----------|
-| **Larger effective window** | Assign to roles that need the most context (Alignment Reviewer checking multiple reference docs, Consolidation synthesizing three reviews) |
-| **Smaller effective window** | Assign to roles with focused scope (Adversarial Reviewer attacking specific attack vectors, Peer Reviewer on a single spec section) |
-| **Context-heavy phase** | If Phase D has a massive diff, consider assigning the largest-window model to the Adversarial Reviewer (who needs to see the most code to find edge cases) |
+#### 7.8.7 Pre-Assembly Checklist
 
-This interacts with Section 3 (Model Assignments). When context pressure is high, window capacity becomes a factor in model selection.
-
-#### 7.8.8 Pre-Assembly Checklist
-
-- [ ] **Prompt template size:** ~1,500-2,500 tokens (known in advance)
-- [ ] **Artifact size:** How large is the spec or diff? If >50% of effective window, consider splitting.
-- [ ] **Reference docs needed:** List them. For each, decide: full / relevant section / extracted constraints / omit with citation.
-- [ ] **Total estimate vs. effective window:** Is the assembled prompt in the 30-60% sweet spot? If not, trim using the priority order (7.8.6).
-- [ ] **High-risk content positioned early:** The most important content for this reviewer should appear in the first third of the prompt. Models attend to it most reliably.
+- [ ] **Artifact size:** If >50% of effective window, consider splitting.
+- [ ] **Reference docs:** For each, decide: full / relevant section / extracted constraints / omit.
+- [ ] **Total estimate:** In the 30-60% sweet spot? If not, trim using priority order (7.8.5).
+- [ ] **High-risk content positioned early** in the first third of the prompt.
 
 ### 7.9 Mid-Phase Intervention
 
-The playbook defines decision gates between phases. This section covers what to do when things go wrong *during* a phase — when the orchestrator needs to intervene before a step completes.
-
-**The default rule:** Let the step complete, then assess. Most problems are better handled at the next gate than by interrupting mid-stream. Intervene only when continuing would waste significant effort or propagate a problem that gets harder to fix later.
+**Default rule:** Let the step complete, then assess. Intervene only when continuing would waste significant effort or propagate a problem that gets harder to fix later.
 
 #### 7.9.1 Detection Triggers
 
-These are signals that the current step has gone wrong and may need intervention before proceeding to the next step.
-
-| Trigger | What You're Seeing | Severity |
-|---------|--------------------|----------|
-| **Sycophantic review output** | "Looks good", "No major issues", approval without evidence of testing. Reviewer filled in severity tables but everything is Minor. No uncomfortable questions. No assumption attacks. | High — output is useless |
-| **Off-role review** | Peer Reviewer doing adversarial attacks. Adversarial Reviewer checking documentation quality. Alignment Reviewer suggesting UX improvements. | Medium — reduces role diversity value |
-| **Truncated or incomplete output** | Review cuts off mid-section. Tables are partially filled. "Due to length constraints..." appears. Sections from the structured framework are missing. | High — incomplete analysis |
-| **Spec gap discovered during implementation** | Developer reports: "The spec doesn't cover X", "This function signature doesn't exist", "The spec says modify but the file doesn't exist" | High — developer is blocked or improvising |
-| **Unconstructive review** | 20+ issues, no severity stratification, style preferences mixed with real bugs, no clear blocking vs. non-blocking distinction | Medium — consolidation will struggle |
-| **Model refusal or misinterpretation** | Model refuses to act as adversarial reviewer ("I don't want to be negative"), interprets the prompt as a request to write code rather than review it, or answers a different question than asked | High — output is wrong-shaped |
-| **Anchoring in consolidation** | Consolidation output heavily mirrors the first review it processed. Disagreeements smoothed over. Unique findings from the second or third reviewer are downgraded or dropped. | Medium — undermines multi-perspective value |
+| Trigger | Severity | Signal |
+|---------|----------|--------|
+| **Sycophantic review** | High | Approval without evidence, all issues Minor, no assumption attacks |
+| **Off-role review** | Medium | Reviewer doing a different role's job (adversarial checking docs, peer doing security) |
+| **Truncated output** | High | Review cuts off, tables partially filled, "due to length constraints..." |
+| **Spec gap during implementation** | High | Developer blocked: "spec doesn't cover X" or "this file doesn't exist" |
+| **Unconstructive review** | Medium | 20+ issues, no severity stratification, style mixed with real bugs |
+| **Model refusal** | High | Refuses adversarial role, interprets review prompt as code-writing task |
+| **Anchoring in consolidation** | Medium | Output mirrors first review processed, disagreements smoothed over |
 
 #### 7.9.2 Intervention Actions
 
-| Trigger | Don't | Do | If That Fails |
-|---------|-------|-----|---------------|
-| **Sycophantic output** | Proceed to consolidation (useless signal) | Re-prompt: "Your previous review found no significant issues. This is unlikely. Review again focusing on [2-3 specific areas]. Your job is to find problems." | Switch models. If two models both produce sycophantic reviews, check your prompt against Section 7.5 — your critique frameworks may be too weak. |
-| **Off-role review** | Reject entirely (may contain useful findings) | Accept output, then supplement with focused follow-up: "Your previous review focused on [X]. This review needs [assigned role focus]. Specifically: [2-3 role-specific questions from Section 4]." | Strengthen role assignment: put role definition and "your focus is X, not Y" at the very top of the prompt. |
-| **Truncated output** | Proceed with partial output (missing sections = missing coverage) | Re-prompt with reduced context — trim using Section 7.8.6 priority order. | Split review into two focused passes (e.g., spec sections 1-4, then 5-8). Consolidate findings from both. Prevention: follow Section 7.8.8 pre-assembly checklist. |
-| **Unconstructive review** | Reject outright (even noisy reviews contain signal) | Request a severity pass: "You identified [N] issues. Categorize each as Critical/Major/Minor. Maximum 3 Critical. If you have more, you're miscalibrating severity." | Extract issues into a severity table yourself. If you can't determine severity from descriptions, the review is genuinely low-value. |
-| **Model refusal** | Argue with the model | Reframe: "attack this spec" → "identify risks and edge cases to help improve it before implementation." Simplify prompt, core instruction in first sentence. | Switch models. Some models are better at adversarial roles than others. |
-| **Anchoring in consolidation** | Proceed to CA Response (biased consolidation = skewed decisions) | Re-prompt: "For each issue found by ANY reviewer, list separately with attribution. Create Agreement Analysis comparing what each reviewer said about each topic." | Prevention: list all three reviews with equal framing. Don't label "primary"/"secondary." Require explicit "Reviewer A said X, Reviewer B said Y" format. |
+| Trigger | Action | If That Fails |
+|---------|--------|---------------|
+| **Sycophantic** | Re-prompt focusing on 2-3 specific areas. "Your job is to find problems." | Switch models. If two models are sycophantic, your critique frameworks are too weak (Section 7.5). |
+| **Off-role** | Accept output, supplement with focused follow-up on the assigned role's mandate (Section 4). | Put role definition at the very top of the prompt: "your focus is X, not Y." |
+| **Truncated** | Re-prompt with reduced context (trim per 7.8.5). | Split into two focused review passes. |
+| **Unconstructive** | Request severity pass: "Categorize each as Critical/Major/Minor. Max 3 Critical." | Extract issues into a severity table yourself. |
+| **Model refusal** | Reframe: "identify risks and edge cases to help improve before implementation." | Switch models. |
+| **Anchoring** | Re-prompt: require explicit "Reviewer A said X, Reviewer B said Y" format per issue. | List all three reviews with equal framing, no "primary"/"secondary" labels. |
 
-**Spec gap during implementation** gets its own treatment because it has a decision threshold:
+**Spec gap during implementation:**
 
-| Action | Details |
-|--------|---------|
-| **Don't** | Let the developer improvise. Undocumented deviations become Section 14 problems in Phase D. |
-| **Do: Pause and report** | Developer stops and reports: what's missing, what they think the right approach is, whether it affects other parts of the spec. |
-| **Micro-decision** | Gap resolvable in one sentence ("Use `raise ValueError` for invalid inputs"): CA decides, documents in brief spec addendum, developer continues. |
-| **Return to spec** | Gap requires redesigning a component or changing the approach: stop implementation, update spec. May need targeted B.4-style verification. |
+| Severity | Action |
+|----------|--------|
+| Resolvable in one sentence | CA decides, documents in brief addendum, developer continues |
+| Requires redesign | Stop implementation, update spec, may need B.4-style verification |
+| **Never** | Let the developer improvise — undocumented deviations become Section 14 problems |
 
-#### 7.9.3 When NOT to Intervene
+#### 7.9.3 Before Intervening, Ask
 
-Not every imperfect output needs intervention. The workflow has multiple checkpoints designed to catch problems downstream.
-
-| Situation | Why Intervention Is Unnecessary |
-|-----------|--------------------------------|
-| One reviewer missed an issue the others caught | That's why you have three reviewers. Consolidation will surface it. |
-| Review is good but not great | Diminishing returns. A 7/10 review with all framework sections filled is good enough. |
-| Minor role overlap between reviewers | Some overlap is natural and even useful for the Agreement Analysis. Only intervene if a role's primary focus is completely absent. |
-| Developer asks a clarifying question during implementation | This is normal and expected. Answer it and let them continue. Only intervene if it reveals a spec gap (see above). |
-| Reviewer disagrees with the spec's approach | This is the point of review. Let it flow to consolidation and CA Response. Don't intervene to "correct" a reviewer's perspective. |
-
-#### 7.9.4 Intervention Cost Awareness
-
-Every intervention costs time and context window budget. Before intervening, ask:
-
-1. **Will the next gate catch this?** If consolidation or CA Response would naturally handle the problem, don't intervene.
-2. **Is the output salvageable?** Partial output with good findings is better than starting from zero. Extract what's useful before deciding to re-run.
-3. **Am I intervening because of quality or preference?** If the review is substantive but formatted differently than you expected, that's not an intervention trigger.
+1. **Will the next gate catch this?** If consolidation or CA Response would naturally handle it, don't intervene.
+2. **Is the output salvageable?** Partial output with good findings beats starting from zero.
+3. **Am I intervening because of quality or preference?** A 7/10 review with all framework sections filled is good enough. One reviewer missing an issue the others caught is the system working, not failing. A reviewer disagreeing with the spec is the point of review — don't "correct" their perspective.
 
 ---
 
@@ -842,33 +690,20 @@ Not every spec needs research. But when open questions exist, resolve them befor
 
 #### A.4: Write Spec v1.0
 
-Write against the structural requirements (Section 8.3). For each section, use the quality gate column to self-check as you go.
+Write against the structural requirements (Section 8.3). Use the quality gate column to self-check as you go.
 
-**Writing order that works well:**
-1. **Overview and Scope first.** Forces clarity on what this spec is and isn't.
-2. **Technical Design next.** The hardest section. Write it while your research is fresh.
-3. **Dependencies and Migration/Compatibility.** These emerge from the technical design.
-4. **Test Strategy.** Easier to write once you know the implementation approach.
-5. **Risk Assessment last.** You can only assess risk after you understand the full design.
-6. **Open Questions throughout.** Add these as you encounter them. Don't save them for the end.
-
-**The "developer test" while writing:** After each technical design section, ask: "Could a developer implement this without asking me a question?" If no, the section needs more detail. Specific file paths, specific function signatures, specific behavior on edge cases. Vague specs produce implementations that deviate from intent.
+**The "developer test":** After each technical design section, ask: "Could a developer implement this without asking me a question?" If no, add detail: specific file paths, function signatures, edge case behavior.
 
 #### A.5: Self-Review
 
-Before submitting to Phase B, review your own spec against the structural requirements table (8.3) and the quality gate (8.6). This is not optional.
+Before submitting to Phase B, review against structural requirements (8.3) and quality gate (8.6):
 
-**Self-review checklist:**
-
-- [ ] Read each row of the structural requirements table (8.3). Is that section present and does it meet the quality gate?
-- [ ] Read the scope section. Is there anything ambiguous about what's in and out?
-- [ ] Read the technical design section pretending you've never seen the codebase. Could you implement it?
-- [ ] Check every file path and function name referenced in the spec. Are they accurate right now, or stale?
-- [ ] Check open questions. Does each one have a recommendation? Are any marked "TBD" with no analysis?
-- [ ] Check against the architecture doc. Does any proposed change violate a constraint?
-- [ ] Read the risk assessment. Is it honest, or did you default to "LOW" because the change feels simple?
-
-**The risk assessment honesty check:** If your risk level is LOW, ask yourself: "Would I bet my weekend that implementation and review go smoothly with no surprises?" If not, it's not LOW.
+- [ ] Every section in 8.3 present and meets quality gate?
+- [ ] Technical design passes the developer test?
+- [ ] Every file path and function name verified against current codebase?
+- [ ] Every open question has a recommendation?
+- [ ] Architecture constraints not violated?
+- [ ] Risk assessment honest? ("Would I bet my weekend nothing goes wrong?" If not, it's not LOW.)
 
 ### 8.3 Structural Requirements for Spec
 
@@ -884,20 +719,18 @@ Every spec must contain these sections. The depth varies by scope, but the struc
 | **Test Strategy** | Unit tests, integration tests, manual testing steps | Reviewers can verify coverage |
 | **Migration/Compatibility** | Breaking changes, deprecation paths, rollback plan | Alignment reviewer can verify compliance |
 | **Risk Assessment** | Risk level, mitigations, monitoring | Adversarial reviewer can attack |
+| **Exclusion List** | What this spec does NOT do, files NOT to touch, approaches NOT to take | Scope creep prevention; reviewers can check compliance |
 
 ### 8.4 Common Phase A Failures
 
-Patterns that reliably produce Phase B problems:
-
-| Failure | What Happens in Phase B | Prevention |
-|---------|------------------------|------------|
-| **Skipped architecture check** | Alignment reviewer flags constraint violations that require redesign | A.1: Read the architecture doc before writing |
-| **Vague technical design** | All three reviewers flag ambiguity. "What does 'refactor the handler' mean?" | A.4: Apply the developer test to every section |
-| **Dishonest risk assessment** | Adversarial reviewer overrides risk level with evidence (see Section 9.7 example) | A.5: Apply the risk assessment honesty check |
-| **Missing scope boundaries** | Reviewers disagree about what's in scope, producing conflicting feedback | A.2: Out-of-scope section with explicit rationale |
-| **Open questions without recommendations** | Review board spends time solving problems the architect should have researched | A.3: Every open question gets a recommendation |
-| **Stale file references** | Reviewer catches that `core/utils.py` was renamed two versions ago | A.5: Verify every file path against current codebase |
-| **Scope too broad** | Reviews are superficial because reviewers can't hold full context | A.2: Apply scoping signals table |
+| Failure | Prevention |
+|---------|------------|
+| Vague technical design | Apply the developer test to every section (A.4) |
+| Dishonest risk assessment | Apply the honesty check (A.5) |
+| Skipped architecture check | Read the architecture doc before writing (A.1) |
+| Missing scope boundaries | Out-of-scope section with explicit rationale (A.2) |
+| Open questions without recommendations | Every open question gets a recommendation (A.3) |
+| Stale file references | Verify every file path against current codebase (A.5) |
 
 ### 8.5 Illustrative Example (Excerpt)
 
@@ -926,13 +759,9 @@ A well-structured Technical Design section:
 
 ### 8.6 Quality Gate
 
-Spec is ready for Phase B when:
-- [ ] All structural sections present (checked against 8.3)
+Spec is ready for Phase B when A.5 self-review checklist is complete and:
 - [ ] No TBD or placeholder content
-- [ ] Open questions have recommendations (even if not resolved)
 - [ ] A developer unfamiliar with the project could implement from this spec
-- [ ] Self-review checklist (A.5) completed
-- [ ] File paths and function names verified against current codebase
 
 ---
 
@@ -966,6 +795,8 @@ B.4: Verification (if needed)
 ### 9.3 B.1: Review Board
 
 Three reviewers work in parallel. Each receives a prompt built on Section 7 principles with role-specific focus.
+
+**The structural requirements below are fixed scaffolding** (severity tables, verdict format, output sections). **The attack vectors and investigation areas are always custom** — the orchestrator identifies the 2-3 highest-risk surfaces for each spec and builds the adversarial reviewer's attack tables around those. Reviewers should also be given the source data (field reports, research findings) when available, and invited to form their own independent conclusions before evaluating the spec's approach.
 
 #### Peer Reviewer Structural Requirements
 
@@ -1105,6 +936,9 @@ Translate the approved spec into working code.
 ### 10.2 Structure
 
 ```
+C.0: CA Investigation (when applicable)
+           │
+           ▼
 C.1: CA Writes Implementation Prompt
            │
            ▼
@@ -1114,7 +948,36 @@ C.2: Developer Implements
 C.3: PR Created → Phase D
 ```
 
-### 10.3 C.1: Implementation Prompt
+### 10.3 C.0: CA Investigation
+
+Before the CA writes the implementation prompt, the orchestrator sends a structured investigation prompt that forces the CA to verify assumptions against the actual codebase.
+
+**When to use:**
+
+| Trigger | Why |
+|---------|-----|
+| Agent team workflows (Tier 1/2) | Orchestrator lacks codebase access; can't verify assumptions directly |
+| Integration PRs | Prior merges may have changed interfaces, data contracts, file structure |
+| Multi-PR sequences (§6.4) | Proposal assumptions drift with each merged PR |
+| First PR after proposal approval | Proposal was written against a point-in-time snapshot of the codebase |
+
+**Skip when:** Trivial patch with 1-3 files, orchestrator has direct codebase access and has already verified, or the CA just completed a previous PR in the same session with fresh context.
+
+**The investigation prompt contains 5-9 specific questions** the CA must answer from the codebase before writing anything. These are not generic — they target the known risk areas for this specific task.
+
+**Question patterns that produce high-quality investigation:**
+
+| Pattern | Example |
+|---------|---------|
+| Map coupling points | "List every file that imports from `core/cache.py` with the specific functions used" |
+| Trace data flow | "Trace the cache key from creation through lookup for three specific scenarios: [A], [B], [C]" |
+| Build gap table | "For each field in the ontology spec, identify the current source in the codebase or mark as 'not yet implemented'" |
+| Verify interfaces | "What is the actual function signature of `assess_review_state()`? What does it return?" |
+| Check assumptions | "The proposal says `ProviderInput` has a `system_prompt` field. Confirm or correct." |
+
+**Output:** Investigation findings document. Where findings contradict the proposal or spec, the findings override. This document becomes raw material for the implementation prompt (C.1).
+
+### 10.4 C.1: Implementation Prompt
 
 The CA writes a prompt that gives the Developer everything needed to implement the spec. Ambiguity here becomes bugs or spec deviations in Phase D.
 
@@ -1130,6 +993,7 @@ The CA writes a prompt that gives the Developer everything needed to implement t
 | Commit Strategy | When to commit, message format |
 | Smoke Test Commands | Commands to run before PR |
 | PR Template | Title format, description structure |
+| Exclusion List | What NOT to do: files not to touch, approaches not to take, scope boundaries |
 
 **Critical instruction:** "Implement exactly what is specified. If something is unclear or seems wrong, stop and ask. Do not deviate from the spec without explicit approval."
 
@@ -1167,18 +1031,16 @@ Apply Section 7.8 principles. Key specifics for implementation prompts:
 - Include existing code only for files being modified, and only the relevant sections.
 - Don't include Phase B review outputs. The spec already incorporates accepted changes.
 
-### 10.4 Common Implementation Prompt Failures
+### 10.5 Common Implementation Prompt Failures
 
-| Failure | What Happens in Phase D | Prevention |
-|---------|------------------------|------------|
-| **Vague file instructions** | Developer interprets ambiguity differently than CA intended. Code review flags "spec deviation" that's really a prompt problem. | Apply the "could implement without interpretation" test to every file entry |
-| **Wrong task order** | Developer creates a file that imports a module not yet created. Build fails mid-implementation. | Order dependencies first. Verify import chains before finalizing order. |
-| **Missing constraints** | Developer uses an approach that violates architecture rules because the prompt didn't mention them. | Copy relevant constraints from spec into file-by-file instructions. Don't assume the developer will check the spec for constraints. |
-| **Over-specified implementation** | Prompt dictates exact code rather than behavior. Developer follows literally, producing code that works but is poorly structured. | Specify what the code should do and what constraints it must respect. Let the developer choose how. |
-| **Missing test guidance** | Developer writes tests that verify the happy path but miss the edge cases Phase B reviewers specifically flagged. | Reference specific scenarios from Phase B adversarial review findings in test requirements. |
-| **No smoke test commands** | Developer creates PR without manual verification. Phase D catches issues that a quick CLI test would have found. | Always include concrete commands the developer can run. |
+| Failure | Prevention |
+|---------|------------|
+| Vague file instructions | Apply "could implement without interpretation" test to every file entry |
+| Missing constraints | Copy relevant constraints from spec into file-by-file instructions — don't assume developer will check the spec |
+| Missing test guidance | Reference specific edge cases from Phase B adversarial findings in test requirements |
+| Over-specified implementation | Specify behavior and constraints, let developer choose how |
 
-### 10.5 C.2: Developer Implements
+### 10.6 C.2: Developer Implements
 
 Developer follows the prompt literally:
 1. Read prompt completely
@@ -1191,7 +1053,7 @@ Developer follows the prompt literally:
 
 **Spec gaps discovered during implementation:** Do not improvise. Flag the gap and request CA decision. See Section 7.9.2 for intervention actions and Section 14 (Spec Deviation Protocol) for post-review handling.
 
-### 10.6 C.3: PR Created
+### 10.7 C.3: PR Created
 
 PR includes:
 - Clear title following project convention
@@ -1246,7 +1108,7 @@ First-pass review before the Review Board.
 
 ### 11.4 D.2: Review Board
 
-Same three roles as spec review, but focused on code.
+Same three roles as spec review, but focused on code. Same principle: structural requirements are fixed scaffolding, but attack vectors are custom per PR. The orchestrator identifies the highest-risk surfaces (e.g., caching interactions, integration seams, user-facing output quality) and tailors the adversarial reviewer's focus accordingly.
 
 #### Peer Reviewer (Code) Structural Requirements
 
@@ -1287,17 +1149,7 @@ Same three roles as spec review, but focused on code.
 
 ### 11.5 D.3: Consolidation
 
-Same structure as B.2, but for code review findings.
-
-| Section | Must Include |
-|---------|--------------|
-| Verdict Summary | Table: Reviewer / Role / Verdict / Blocking Issues |
-| Blocking Issues | Must fix before merge |
-| Should-Fix Issues | Recommended but not blocking |
-| Minor Issues | Consider |
-| Agreement Analysis | Consensus and disagreements |
-| Required Actions for Developer | Prioritized fix list |
-| Test Verification Requirements | How to verify each fix |
+Same structure as B.2 (Section 9.4) with two additions: **Required Actions for Developer** (prioritized fix list) and **Test Verification Requirements** (how to verify each fix).
 
 ### 11.6 D.4: Developer Fixes
 
@@ -1595,6 +1447,18 @@ For bug fixes and polish after a release.
 - Check each fix doesn't break something else
 - Verify test catches the regression
 
+#### Evidence-Based Patch Mode
+
+For patches driven by observational data (field reports, profiling results, user feedback, error logs) rather than a requirements document.
+
+**Entry criteria:** Data has been collected from a deployed system, the CA can go straight to implementation without a formal spec cycle, and the data itself is available for independent analysis.
+
+**Workflow differences:**
+- **Phase A/B collapsed.** The field data serves as the input; the CA writes the implementation prompt directly (with C.0 investigation if applicable).
+- **Review anchors against the implementation prompt** as the de facto spec, plus the raw field data.
+- **Reviewers get the source data** and are explicitly invited to form their own conclusions before evaluating the CA's approach: "Read the field data independently. Does the implementation address the right problems? Are there issues the CA's analysis missed?"
+- The risk of skipping spec review is compensated by giving reviewers more latitude to challenge the approach, not just the implementation.
+
 ### 15.3 Hotfix Phase
 
 Emergency fixes for production issues.
@@ -1604,6 +1468,16 @@ Emergency fixes for production issues.
 | Risk | High (speed vs. thoroughness) |
 | Focus | Fix the issue, minimize blast radius |
 | Process | Abbreviated: CA + Adversarial only |
+
+#### Validation / Observation Runs
+
+Not a development phase, but a gate protocol for tasks that run deployed code and report results without changing it. Used for: field testing after deployment, performance benchmarking, corpus processing for data collection, pre-release acceptance testing.
+
+**Key rules:**
+- **Do not fix pipeline/logic bugs during the run.** Only infrastructure/environment fixes (permissions, paths, tooling) are allowed. If a pipeline bug is found, abort, fix in a separate PR, re-run.
+- **Every intervention must be documented** in a session log (§2.6) with the exact change and rationale.
+- **The output is a structured report** that feeds back into the next planning cycle — typically as input to an Evidence-Based Patch (§15.2) or a new Phase A spec.
+- **Preflight gates:** Define abort-early conditions before starting (e.g., "if test suite fails, abort before full corpus run"). Saves time when the full run would fail.
 
 ### 15.4 Track-Based Implementation
 
@@ -1639,16 +1513,7 @@ Phase A → Phase B → Approved Spec v1.1
 
 **Why sequential is the default:** Merge conflicts and interaction bugs are common even with "minimal" overlap. Sequential also means Track B's prompt references the actual merged codebase, not a hypothetical future state.
 
-**Benefits:**
-- Focused context windows
-- Independent verification
-- Cleaner git history
-- Failure isolation
-
-**When NOT to use:**
-- Changes are tightly coupled (files overlap significantly)
-- Total scope is small enough for one context window
-- Sequential dependency (Track B can't start until Track A's code exists)
+**When NOT to use:** Changes are tightly coupled (significant file overlap), total scope fits one context window, or Track B depends on Track A's code existing.
 
 ### 15.5 Agent Team Workflow
 
@@ -1849,6 +1714,15 @@ Critical rules:
 
 **Tier 2 (Guided Multi-Model):** Same structure as Tier 1 with: dev team cap raised to 5 developers, orchestrator actively reviews spec before dev starts and findings before CA cross-check, consider adding one Gemini reviewer for cross-model diversity, CA cross-check becomes a thorough evaluation with explicit response document, may combine with Section 15.4 for multi-track work.
 
+**Tier 2 orchestrator checkpoint checklist** (when reviewing CA's spec before dev starts):
+- [ ] Does the spec match the proposal / approved scope?
+- [ ] Did the CA discover anything surprising in the codebase?
+- [ ] Is the decomposition reasonable (right number of developers, clean file boundaries)?
+- [ ] Any scope creep signals (files or subsystems not in the original scope)?
+- [ ] For multi-PR sequences: does the spec incorporate the sequence ledger findings (§6.4)?
+
+**Proposal review via agent teams:** When running a proposal review (§13) through agent teams, key differences from spec review: the review team focuses on approach and feasibility rather than implementation correctness, consolidation produces open questions for the architect rather than blocking issues for the developer, and the one-revision cap does NOT apply.
+
 **Tier 3 (Full Orchestration):** Revert to standard playbook (Phases A-D). Agent teams may assist within individual phases, but the orchestrator manually manages phase transitions with full model diversity per Section 3.
 
 #### 15.5.7 When NOT to Use Agent Team Workflow
@@ -1867,12 +1741,12 @@ Same failure modes as manual orchestration (Section 7.9), plus agent-team-specif
 
 | Failure Mode | Signal | Intervention |
 |--------------|--------|--------------|
-| Solo execution (no team spawned) | Model fulfills all roles in a single session, no teammates visible, context compaction from overloaded window | Re-prompt with stronger activation directive. Lead with "Create an agent team" as the literal first instruction. Verify the platform supports agent teams. |
-| Developer agent improvising | Dev messages CA about a spec gap but CA approves without updating spec | Pause, apply spec gap protocol (Section 7.9.2) |
-| Review lead smoothing disagreements | Consolidated output has no disagreement section, or disagreements are framed as "minor differences in emphasis" | Re-prompt lead with consolidation rules, or manually extract reviewer outputs |
-| Single-model blind spot | All three reviewers approve an area that feels risky | This is the known limitation. The CA cross-check (different model) is the safety net. If you're uncomfortable, escalate to Tier 2. |
-| Teammate drift | A reviewer starts doing a different role's job (adversarial reviewer checking documentation quality) | Check spawn prompts. If mandates were clear, re-spawn the drifting reviewer. |
-| Token budget exceeded | Agent team stalls or produces truncated output | Reduce context per reviewer. Use Section 7.8.6 priority order for trimming reference docs. |
+| Solo execution (no team spawned) | All roles in one session, no teammates visible | Re-prompt: "Create an agent team" as literal first instruction. Verify platform supports it. |
+| Developer improvising | CA approves spec gap without updating spec | Pause, apply spec gap protocol (§7.9.2) |
+| Review lead smoothing disagreements | No disagreement section, or "minor differences in emphasis" | Re-prompt with consolidation rules, or manually extract reviewer outputs |
+| Single-model blind spot | All reviewers approve an area that feels risky | Known limitation. CA cross-check is the safety net. Escalate to Tier 2 if uncomfortable. |
+| Teammate drift | Reviewer doing another role's job | Re-spawn the drifting reviewer with clearer mandate |
+| Token budget exceeded | Stalled or truncated output | Reduce context per reviewer (§7.8.5) |
 
 ---
 
@@ -1927,13 +1801,15 @@ Every review output should have:
 
 **File naming pattern:**
 ```
-[Version]_[Phase]_[Step]_[Role].md
+[Version]_[Phase]_[Step]_[Role]_[TaskID].md
 ```
 
+The `[TaskID]` is a PR number, spec name, or short descriptor. Required for multi-PR projects to avoid ambiguous filenames; optional for single-PR releases.
+
 **Examples:**
-- `v2.1_PhaseB_B1_Peer_Review.md`
-- `v2.1_PhaseD_D3_Consolidation.md`
-- `v2.1_PhaseD_D6_Final_Approval.md`
+- `v2.1_PhaseB_B1_Peer_Review_PR2.md`
+- `v2.1_PhaseD_D3_Consolidation_CacheFix.md`
+- `v2.1_PhaseD_D6_Final_Approval_PR8.md`
 
 ---
 
@@ -1949,103 +1825,25 @@ Added to D.6 Final Approval. Three fields:
 | Review role that found most consequential issue | Identify which perspective is most valuable |
 | Anything review process missed (found later) | Feedback for improvement |
 
-### 17.2 Periodic Review Quality Assessment
+### 17.2 When to Recalibrate
 
-Every 3-5 releases, ask:
+Every 3-5 releases, assess: Were adversarial findings practical or theoretical? Did alignment catch deviations others missed? What did review miss that was found post-merge?
 
-1. Which reviewer role surfaced the most costly issue?
-2. Did any role produce consistently low-value feedback?
-3. Were adversarial findings practical or theoretical?
-4. Did the alignment reviewer catch deviations others missed?
-5. What did the review process miss that was found post-merge?
-
-### 17.3 When to Recalibrate
-
-**Change model assignments when:**
-- One model consistently misses issues another catches
-- A model's strengths have shifted (new version, new capabilities)
-- Project focus has changed (more security-critical, more UX-focused)
-
-**Adjust role focus when:**
-- One role's findings are consistently low-value
-- Critical issues are being missed by all roles
-- Review rounds are taking too long for the value delivered
+**Change model assignments when** one model consistently misses issues another catches, a model's strengths have shifted, or project focus has changed. **Adjust role focus when** one role's findings are consistently low-value or review rounds take too long for the value delivered.
 
 ---
 
 ## 18. Troubleshooting
 
-These are post-hoc diagnoses — patterns you notice after a phase or release. For real-time intervention during a phase, see Section 7.9.
+Post-hoc diagnoses — patterns you notice after a phase or release. For real-time intervention, see Section 7.9.
 
-### 18.1 Reviews Are Too Gentle
-
-**Symptoms:** "Looks good", "No major issues", approvals without evidence of testing.
-
-**Causes:**
-- Prompts use approval-seeking language
-- Missing structured critique frameworks
-- No explicit permission to disagree
-
-**Fixes:**
-- Apply Section 7.2 anti-patterns
-- Add assumption attack tables and blind spot prompts
-- Include "Your job is to find problems" in every review prompt
-
-### 18.2 Reviews Are Unconstructive
-
-**Symptoms:** Long lists of nitpicks, no severity stratification, style preferences treated as bugs.
-
-**Causes:**
-- Missing severity framework
-- No distinction between blocking and non-blocking
-- Reviewer not given clear focus
-
-**Fixes:**
-- Require severity stratification in output
-- Add "Do not list more than 3 Critical issues"
-- Clarify role-specific focus (peer vs. adversarial vs. alignment)
-
-### 18.3 Too Many Review Rounds
-
-**Symptoms:** Round 3, 4, 5 happening regularly.
-
-**Causes:**
-- Scope too large for one spec
-- Requirements unclear
-- One-revision cap not enforced
-
-**Fixes:**
-- Apply decision matrix (Section 2.2.1) rigorously
-- Split scope into tracks (Section 15.4)
-- Return to Phase A if Round 2 doesn't converge
-
-### 18.4 Implementation Doesn't Match Spec
-
-**Symptoms:** Code review finds significant deviations.
-
-**Causes:**
-- Spec was ambiguous
-- Developer improvised instead of flagging gaps
-- Spec gaps discovered during implementation but not communicated
-
-**Fixes:**
-- Apply Spec Deviation Protocol (Section 14)
-- Strengthen implementation prompt: "If unclear, stop and ask"
-- Improve spec quality gates (Section 8.6)
-
-### 18.5 Consolidation Misses Issues
-
-**Symptoms:** Issues flagged by reviewers not appearing in consolidation.
-
-**Causes:**
-- Consolidator summarizing instead of synthesizing
-- Disagreements being smoothed over
-- No structured template
-
-**Fixes:**
-- Require table format for all issues
-- Mandate Agreement Analysis section
-- Distinguish factual vs. priority disagreements explicitly
+| Symptom | Root Cause | Fix |
+|---------|-----------|-----|
+| Reviews too gentle ("Looks good", no evidence of testing) | Approval-seeking language, missing critique frameworks | Apply anti-patterns (§7.2), add structured critique (§7.3) |
+| Reviews unconstructive (nitpick lists, no severity) | Missing severity framework, unclear role focus | Require severity stratification, clarify role mandates (§4) |
+| Too many review rounds (3+) | Scope too broad, requirements unclear | Apply decision matrix (§2.2.1), split tracks (§15.4), return to Phase A |
+| Implementation doesn't match spec | Ambiguous spec, developer improvised | Spec Deviation Protocol (§14), strengthen "stop and ask" instruction |
+| Consolidation misses issues | Summarizing not synthesizing, disagreements smoothed | Require table format, mandate Agreement Analysis, distinguish factual vs. priority disagreements |
 
 ---
 
@@ -2053,75 +1851,30 @@ These are post-hoc diagnoses — patterns you notice after a phase or release. F
 
 ### 19.1 Phase Checklist
 
-#### Pre-Phase A: Triage (if applicable)
-- [ ] Pre-A.1: CA triages findings (In Scope / Deferred / Rejected)
-- [ ] Pre-A.2: Review Board validates triage
-- [ ] Pre-A.3: Consolidate (distinguish misunderstandings from disagreements)
-- [ ] Pre-A.4: CA responds to blocking challenges only
+**Pre-Phase A** (if applicable): Triage (§12) or Proposal Review (§13) → approved scope → Phase A.
 
-#### Pre-Phase A: Proposal Review (if applicable)
-- [ ] Develop proposal
-- [ ] Review Board reviews proposal
-- [ ] Consolidate findings
-- [ ] CA responds
-- [ ] Finalize → proceed to Phase A
+**Phase A:** A.1 Gather inputs → A.2 Scope → A.3 Research → A.4 Write spec v1.0 → A.5 Self-review → A.6 Submit for Phase B.
 
-#### Phase A: Spec Development
-- [ ] A.1: Gather inputs (roadmap, architecture, strategy, prior specs)
-- [ ] A.2: Scope the work (apply scoping signals table)
-- [ ] A.3: Research open questions (if any)
-- [ ] A.4: Write spec v1.0 (against structural requirements 8.3)
-- [ ] A.5: Self-review (checklist in 8.2, quality gate 8.6)
-- [ ] A.6: Submit for Phase B
+**Phase B:** B.1 Review Board (parallel) → B.2 Consolidation → B.3 CA Response → Spec v1.1 → B.4 Verification (if needed) → Phase C.
 
-#### Phase B: Spec Review
-- [ ] B.1: Review Board (Peer, Alignment, Adversarial) — parallel
-- [ ] B.2: Consolidation
-- [ ] B.3: CA Response → Spec v1.1
-- [ ] B.4: Verification (if significant changes)
-- [ ] Approved spec → Phase C
+**Phase C:** C.0 CA investigation (if applicable, §10.3) → C.1 CA writes implementation prompt → C.2 Developer implements → C.3 PR created → Phase D.
 
-#### Phase C: Implementation
-- [ ] C.1: CA writes implementation prompt
-- [ ] C.2: Developer implements
-- [ ] C.3: PR created → Phase D
+**Phase D:** D.1 CA PR Review → D.2 Review Board (parallel) → D.3 Consolidation → D.4 Developer fixes → D.5 Adversarial verification → D.6 Final approval + retrospective → Merge.
 
-#### Phase D: Code Review
-- [ ] D.1: CA PR Review
-- [ ] D.2: Review Board (Peer, Alignment, Adversarial) — parallel
-- [ ] D.3: Consolidation
-- [ ] D.4: Developer fixes (if needed)
-- [ ] D.5: Adversarial verification
-- [ ] D.6: CA final approval + retrospective
-- [ ] Merge
+**Prompt generation** (every phase transition): Confirm variables (§6.3), ask delivery preference (§7.7), generate as separate files (§7.6), check context budget (§7.8).
 
-#### Prompt Generation (every phase transition)
-- [ ] Confirm branch name, PR number, spec version
-- [ ] Ask orchestrator: full phase suite or step by step?
-- [ ] Generate each prompt as its own .md file (hard rule)
-- [ ] Each prompt is self-contained
-- [ ] Context budget checked (30-60% of effective window)
-- [ ] Deliver as separate files per 7.6
+**Agent team workflow** (Tier 1/2): Assess risk → confirm tier (§15.5.1) → generate meta prompts (§15.5.4, §15.5.5) → hand off → checkpoints → merge.
 
-#### Agent Team Workflow (Section 15.5, Tier 1)
-- [ ] Assess risk characteristics → confirm Tier 1 is appropriate
-- [ ] Check escalation triggers → escalate if needed
-- [ ] Generate Development Team meta prompt (15.5.4)
-- [ ] Generate Review Team meta prompt (15.5.5)
-- [ ] Hand Development Team prompt to Codex agent team
-- [ ] Checkpoint: scan dev output before handing to review team
-- [ ] Hand Review Team prompt (with PR/diff) to Claude Code agent team
-- [ ] Checkpoint: scan consolidated review for single-model blind spot risks
-- [ ] Hand consolidated review to Codex CA agent for cross-check
-- [ ] Checkpoint: review final approval before merge
+### 19.2 Key Reference Sections
 
-### 19.2 Quick Reference Cards
-
-For prompt energy language substitutions, see Section 7.4.
-For severity levels, see Section 16.3.
-For the Round 2 decision matrix, see Section 2.2.1.
-For agent team tier selection, see Section 15.5.1.
-For agent team meta prompt templates, see Sections 15.5.4 and 15.5.5.
+| Topic | Section |
+|-------|---------|
+| Prompt energy language | §7.4 |
+| Severity levels | §16.3 |
+| Round 2 decision matrix | §2.2.1 |
+| Agent team tier selection | §15.5.1 |
+| Meta prompt templates | §15.5.4, §15.5.5 |
+| Context trimming priority | §7.8.5 |
 
 ---
 
@@ -2150,7 +1903,8 @@ These are the "approved documents" referenced throughout this playbook.
 | 3.2 | 2026-02-06 | Compaction pass. Consolidated 7.9 intervention tables, eliminated Quick Reference duplicates, tightened prose throughout. Strengthened 7.6 file-per-prompt as hard rule with operational rationale. Rewrote 7.7 to ask orchestrator for delivery preference (full suite vs. step by step) instead of defaulting to full suite. Net: 2,044 → ~1,920 lines. |
 | 3.3 | 2026-02-09 | Added: Agent Team Workflow (15.5) with three-tier orchestration system. Defines Development Team (Codex, dynamic composition) and Review Team (Claude Code, fixed composition) meta prompts with explicit agent team activation directives. Tier system based on risk characteristics with escalation triggers. |
 | 3.3.1 | 2026-02-23 | Fixed: Development Team meta prompt (15.5.4) now includes branch creation, commit strategy, test commands, and PR creation requirements. Added missing Task Context variables. |
+| 3.4.0 | 2026-03-22 | Compaction pass: 2,157 → 1,818 lines. Consolidated anti-pattern tables, pattern examples, context window tables, troubleshooting section, quick reference checklists. Added: C.0 CA Investigation step (10.3) with investigation question patterns. Multi-PR Sequence Ledger (6.4). Evidence-Based Patch mode (15.2). Validation/Observation Run protocol (15.3). Exclusion List as mandatory section in specs (8.3) and implementation prompts (10.4). Custom attack vectors principle (9.3, 11.4). Tier 2 checkpoint checklist and proposal review integration (15.5.6). Session logs artifact type (2.6). Test count tracking (6.3). Agent team workflow adjustments: PR number placeholders, branch naming (6.3). File naming with task identifier (16.4). |
 
 ---
 
-*End of LLM Development Playbook v3.3.1*
+*End of LLM Development Playbook v3.4.0*
