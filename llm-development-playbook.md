@@ -1,7 +1,7 @@
 # LLM Development Playbook: Multi-Agent Review Workflow
 
-**Version:** 3.4.0
-**Updated:** 2026-03-22
+**Version:** 3.5.0
+**Updated:** 2026-03-28
 **Based on:** Battle-tested patterns across 8+ release cycles
 
 ---
@@ -699,6 +699,7 @@ Write against the structural requirements (Section 8.3). Use the quality gate co
 Before submitting to Phase B, review against structural requirements (8.3) and quality gate (8.6):
 
 - [ ] Every section in 8.3 present and meets quality gate?
+- [ ] Diagrams pass quality criteria (8.3.1)? Every component in diagrams matches prose, error paths shown?
 - [ ] Technical design passes the developer test?
 - [ ] Every file path and function name verified against current codebase?
 - [ ] Every open question has a recommendation?
@@ -720,6 +721,24 @@ Every spec must contain these sections. The depth varies by scope, but the struc
 | **Migration/Compatibility** | Breaking changes, deprecation paths, rollback plan | Alignment reviewer can verify compliance |
 | **Risk Assessment** | Risk level, mitigations, monitoring | Adversarial reviewer can attack |
 | **Exclusion List** | What this spec does NOT do, files NOT to touch, approaches NOT to take | Scope creep prevention; reviewers can check compliance |
+| **Diagrams** | At least two: (1) Architecture/Component diagram, (2) State Machine or Sequence diagram. See 8.3.1. | Every named component appears in both diagrams and prose; error paths shown |
+
+#### 8.3.1 Diagram Requirements
+
+**Hard gate.** No spec exits Phase A without at least two diagrams:
+
+1. **Architecture/Component Diagram.** Shows system boundaries, data stores, external dependencies, and component relationships. Must name every component and show data flow direction.
+2. **State Machine or Sequence Diagram.** Shows the core flow's lifecycle: states, transitions, triggers, and error/retry paths. If the feature has no meaningful state transitions, a sequence diagram showing the request/response flow between components is acceptable.
+
+Additional diagram types (test matrix, data flow, dependency graph) are encouraged but not required for gate passage.
+
+**Quality criteria — a diagram is insufficient if any of these fail:**
+
+- Every named component in the diagram appears in the prose spec, and vice versa. Mismatches between diagram and prose are a blocking finding in Phase B.
+- Error and failure paths are shown, not just the happy path. A state machine with no error transitions or a sequence diagram with no failure responses is incomplete.
+- External dependencies and trust boundaries are visually distinct from internal components (different box style, border, or label prefix).
+- Diagrams are text-based (ASCII, Mermaid, or PlantUML) so they live in version control and can be reviewed in diffs. No image-only diagrams.
+- Diagrams are embedded in the spec document, not referenced as separate files. Reviewers must see diagrams and prose together.
 
 ### 8.4 Common Phase A Failures
 
@@ -731,6 +750,7 @@ Every spec must contain these sections. The depth varies by scope, but the struc
 | Missing scope boundaries | Out-of-scope section with explicit rationale (A.2) |
 | Open questions without recommendations | Every open question gets a recommendation (A.3) |
 | Stale file references | Verify every file path against current codebase (A.5) |
+| Missing or happy-path-only diagrams | Diagram gate (8.3.1): two required diagrams with error paths shown |
 
 ### 8.5 Illustrative Example (Excerpt)
 
@@ -762,6 +782,7 @@ A well-structured Technical Design section:
 Spec is ready for Phase B when A.5 self-review checklist is complete and:
 - [ ] No TBD or placeholder content
 - [ ] A developer unfamiliar with the project could implement from this spec
+- [ ] At least two diagrams present and passing quality criteria (8.3.1)
 
 ---
 
@@ -803,6 +824,7 @@ Three reviewers work in parallel. Each receives a prompt built on Section 7 prin
 | Section | Must Include |
 |---------|--------------|
 | Completeness Check | Missing sections, gaps in coverage |
+| Diagram-Prose Cross-Reference | Every component in diagrams appears in prose and vice versa. Mismatches are blocking (§8.3.1). |
 | Quality Assessment | Design quality, clarity, implementability |
 | UX Review | User-facing implications, documentation accuracy |
 | Issues Found | By severity (Critical/Major/Minor) with specific locations |
@@ -816,6 +838,7 @@ Three reviewers work in parallel. Each receives a prompt built on Section 7 prin
 | Section | Must Include |
 |---------|--------------|
 | Architecture Compliance | Layer violations, import rules, patterns |
+| Diagram-Architecture Cross-Reference | Diagrams match architecture doc. Components, boundaries, and data flows in diagrams consistent with prose. Mismatches are blocking (§8.3.1). |
 | Roadmap Alignment | Does spec implement what was planned? |
 | Constraint Verification | Each constraint checked with evidence |
 | Backward Compatibility | Breaking changes identified, deprecation paths verified |
@@ -831,6 +854,7 @@ Three reviewers work in parallel. Each receives a prompt built on Section 7 prin
 |---------|--------------|
 | Assumption Attack | Table: Assumption / Why It Might Be Wrong / Impact If Wrong |
 | Failure Mode Analysis | Table: Failure / How It Happens / Would We Notice? |
+| Diagram Completeness Attack | Error paths described in prose but missing from state/sequence diagram? Components in prose absent from architecture diagram? Mismatches are blocking (§8.3.1). |
 | Edge Case Inventory | Specific inputs/scenarios that could break this |
 | Security Surface | Attack vectors relevant to this spec |
 | Blind Spot Identification | What's the architect not seeing? What seems too simple? |
@@ -1130,6 +1154,7 @@ Same three roles as spec review, but focused on code. Same principle: structural
 | API Stability | Public interface changes |
 | Constraint Verification | Each constraint checked against actual code |
 | Deviation Report | Code differs from spec v1.1 |
+| Diagram Verification | Implementation matches spec diagrams: components exist, data flows match, error paths from state/sequence diagrams are implemented |
 | Verdict | Approve / Request Changes |
 
 #### Adversarial Reviewer (Code) Structural Requirements
@@ -1904,7 +1929,8 @@ These are the "approved documents" referenced throughout this playbook.
 | 3.3 | 2026-02-09 | Added: Agent Team Workflow (15.5) with three-tier orchestration system. Defines Development Team (Codex, dynamic composition) and Review Team (Claude Code, fixed composition) meta prompts with explicit agent team activation directives. Tier system based on risk characteristics with escalation triggers. |
 | 3.3.1 | 2026-02-23 | Fixed: Development Team meta prompt (15.5.4) now includes branch creation, commit strategy, test commands, and PR creation requirements. Added missing Task Context variables. |
 | 3.4.0 | 2026-03-22 | Compaction pass: 2,157 → 1,818 lines. Consolidated anti-pattern tables, pattern examples, context window tables, troubleshooting section, quick reference checklists. Added: C.0 CA Investigation step (10.3) with investigation question patterns. Multi-PR Sequence Ledger (6.4). Evidence-Based Patch mode (15.2). Validation/Observation Run protocol (15.3). Exclusion List as mandatory section in specs (8.3) and implementation prompts (10.4). Custom attack vectors principle (9.3, 11.4). Tier 2 checkpoint checklist and proposal review integration (15.5.6). Session logs artifact type (2.6). Test count tracking (6.3). Agent team workflow adjustments: PR number placeholders, branch naming (6.3). File naming with task identifier (16.4). |
+| 3.5.0 | 2026-03-28 | Added mandatory diagramming gate at Phase A exit (8.3.1). Specs must include at least two text-based diagrams (architecture/component + state machine/sequence) with quality criteria. Diagrams are reviewable artifacts: all three reviewer roles cross-reference diagrams against prose in Phase B (9.3) and Phase D (11.4). Diagram-prose mismatches are blocking by default. |
 
 ---
 
-*End of LLM Development Playbook v3.4.0*
+*End of LLM Development Playbook v3.5.0*
