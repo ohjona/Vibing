@@ -1,7 +1,7 @@
 # LLM Development Playbook: Multi-Agent Review Workflow
 
-**Version:** 3.5.0
-**Updated:** 2026-03-28
+**Version:** 3.6.0
+**Updated:** 2026-04-04
 **Based on:** Battle-tested patterns across 8+ release cycles
 
 ---
@@ -172,6 +172,7 @@ Markdown files are working artifacts during development. PR comments are the pub
 |--------|----------|---------|
 | Review prompts | `.md` files delivered to orchestrator | Working artifacts |
 | Review outputs | PR comments (primary), `.md` backups | Official record |
+| Review verdicts | `review-verdict.md` in project internal directory (see §16.5) | Named artifact for resumability and decision traceability |
 | Decisions | PR comments | Audit trail |
 | Specs | Project internal directory | Reference, version-controlled |
 | Session logs | Project internal directory | Chronological record for validation runs, environment debugging, complex multi-attempt tasks. Records every decision, dead end, and learning. |
@@ -869,7 +870,7 @@ Synthesize all three reviews into a decision-ready document.
 
 | Section | Must Include |
 |---------|--------------|
-| Verdict Summary | Table: Reviewer / Role / Verdict / Blocking Issues Count |
+| Verdict Summary | Table: Reviewer / Role / Lens / Verdict / Blocking Issues Count. Lens defaults to "Technical" in spec and code reviews; populated from §13.4 in proposal reviews. |
 | Blocking Issues | Combined list with issue ID, description, flagged by, category, action required |
 | Should-Fix Issues | Non-blocking but recommended |
 | Minor Issues | Consider but not required |
@@ -1392,7 +1393,43 @@ Finalized proposal → Phase A
 
 **Key principle:** Proposal reviews are exploratory. The one-revision cap does NOT apply. However, proposals shouldn't iterate indefinitely.
 
-### 13.4 Iteration Limits
+### 13.4 Reviewer Configuration
+
+Proposal Review now formalizes its reviewer composition. Unlike Phase B (which runs a full 3-reviewer board focused on technical execution), Proposal Review uses a 2-reviewer configuration with explicit lens assignments.
+
+**Recommended configuration:**
+
+| Reviewer | Posture | Lens | Focus |
+|----------|---------|------|-------|
+| Reviewer 1 | Adversarial | Product | Is this the right thing to build? |
+| Reviewer 2 | Alignment | Technical | Is the proposed approach sound at a high level? |
+
+**Why Adversarial + Product:** This is the pairing most likely to surface "you're solving the wrong problem" — the finding least likely to emerge from technical review alone. Product-lens review in Phase B is too late; the Phase A effort has already been spent.
+
+**Product-lens prompt preamble:**
+
+```
+YOUR LENS: Product
+
+You are reviewing whether this is the right thing to build. Focus on:
+problem-solution fit, scope calibration, simpler alternatives, operational
+simplicity, and whether the problem statement reflects the user's actual need.
+
+You are NOT reviewing architecture, code quality, or test coverage — that
+happens in Phase B. However, flag any cross-cutting concerns where a product
+decision has obvious technical consequences.
+```
+
+**Consolidation verdict table for Proposal Review:**
+
+| Reviewer | Posture | Lens | Verdict | Blocking Issues |
+|----------|---------|------|---------|-----------------|
+
+**Agreement Analysis note:** Product-lens vs. Technical-lens disagreements are the highest-signal finding type. When the two reviewers reach opposite verdicts, surface both views explicitly — do not smooth them into a compromise.
+
+**What the Product lens does NOT gate:** Phase B reviewer configuration is unchanged. The 3-reviewer board with 2+ model families remains mandatory. The Product lens applies only in Proposal Review (§13).
+
+### 13.5 Iteration Limits
 
 | Round | Status | Action |
 |-------|--------|--------|
@@ -1836,6 +1873,47 @@ The `[TaskID]` is a PR number, spec name, or short descriptor. Required for mult
 - `v2.1_PhaseD_D3_Consolidation_CacheFix.md`
 - `v2.1_PhaseD_D6_Final_Approval_PR8.md`
 
+### 16.5 Review Verdict Artifact
+
+After B.2 consolidation (Spec Review) and D.3 consolidation (Code Review), save the output as a named file. This is the primary artifact for resumability and decision traceability.
+
+**File location:**
+```
+[INTERNAL_DOCS_DIR]/reviews/<feature-slug>-<phase>-verdict.md
+```
+
+The `<phase>` suffix (B or D) distinguishes spec review from code review verdicts for the same feature. Examples:
+- `.project-internal/reviews/auth-refactor-B-verdict.md`
+- `.project-internal/reviews/auth-refactor-D-verdict.md`
+
+**Context header (prepend to existing consolidation output):**
+
+```markdown
+# Review Verdict: [Feature Name]
+
+**Phase:** B (Spec Review) | D (Implementation Review)
+**Date:** YYYY-MM-DD
+**Spec/PR:** [link or filename]
+**Reviewers:** [model, posture, lens] for each reviewer
+**Overall Status:** Approve | Needs Fixes | Needs Re-Scoping
+
+---
+```
+
+The body is the standard consolidation output (verdict table, blocking issues, agreement analysis, required actions). No new format required — only the context header is added.
+
+**What this enables:**
+
+| Use Case | How |
+|----------|-----|
+| Resumability | Start a fresh session, point it at `review-verdict.md` + C.1 prompt — it knows what was found and decided without re-explaining |
+| Decision traceability | When something breaks later, trace back through verdict files to find where the assumption was approved |
+| Cold-start for implementation | A fresh session with C.1 + B-verdict.md should be able to execute without clarifying questions |
+
+**No new tooling required.** The orchestrator (or the consolidation session) saves the output as a file. The gate criteria and review process are unchanged — this is a save step, not a new workflow step.
+
+**Validation signal:** If a fresh session given only `review-verdict.md` + C.1 asks clarifying questions about prior decisions, strengthen C.1's self-contained-ness rather than adding more artifacts.
+
 ---
 
 ## 17. Process Evaluation
@@ -1930,7 +2008,8 @@ These are the "approved documents" referenced throughout this playbook.
 | 3.3.1 | 2026-02-23 | Fixed: Development Team meta prompt (15.5.4) now includes branch creation, commit strategy, test commands, and PR creation requirements. Added missing Task Context variables. |
 | 3.4.0 | 2026-03-22 | Compaction pass: 2,157 → 1,818 lines. Consolidated anti-pattern tables, pattern examples, context window tables, troubleshooting section, quick reference checklists. Added: C.0 CA Investigation step (10.3) with investigation question patterns. Multi-PR Sequence Ledger (6.4). Evidence-Based Patch mode (15.2). Validation/Observation Run protocol (15.3). Exclusion List as mandatory section in specs (8.3) and implementation prompts (10.4). Custom attack vectors principle (9.3, 11.4). Tier 2 checkpoint checklist and proposal review integration (15.5.6). Session logs artifact type (2.6). Test count tracking (6.3). Agent team workflow adjustments: PR number placeholders, branch naming (6.3). File naming with task identifier (16.4). |
 | 3.5.0 | 2026-03-28 | Added mandatory diagramming gate at Phase A exit (8.3.1). Specs must include at least two text-based diagrams (architecture/component + state machine/sequence) with quality criteria. Diagrams are reviewable artifacts: all three reviewer roles cross-reference diagrams against prose in Phase B (9.3) and Phase D (11.4). Diagram-prose mismatches are blocking by default. |
+| 3.6.0 | 2026-04-04 | Added Product-lens reviewer as mandatory role in Proposal Review (§13.4). Formalizes §13 reviewer configuration: 2-reviewer board with Adversarial+Product and Alignment+Technical pairings. Product lens targets "wrong thing to build" findings before Phase A effort is spent. Added Review Verdict Artifact (§16.5): `review-verdict.md` saved after B.2 and D.3 consolidation for resumability and decision traceability. Updated §2.6 output table and §9.4 B.2 verdict table to include Lens column (defaults to Technical in spec/code reviews, populated from §13.4 in proposal reviews). |
 
 ---
 
-*End of LLM Development Playbook v3.5.0*
+*End of LLM Development Playbook v3.6.0*
